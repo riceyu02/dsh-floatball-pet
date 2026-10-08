@@ -17,6 +17,8 @@ window.__ModuleLoader__.load({
       intro: '桌宠悬浮球与灵动岛。这里只控制它开不开、以及版本更新；大小、图标、灵动岛这些外观设置在悬浮球自己的齿轮面板里。',
       enable: '启用灵动岛悬浮球',
       enableHint: '关掉只是停止悬浮球进程，灵动岛的外观与偏好设置都原样保留。',
+      startup: '开机自启动',
+      startupHint: '开机后自动启动 DSH，悬浮球随之出现。插件模式下悬浮球由 DSH 拉起，所以这一项就是让 DSH 开机启动。',
       version: '版本',
       check: '检查更新',
       checking: '正在查询 GitHub…',
@@ -113,6 +115,19 @@ window.__ModuleLoader__.load({
         }
       }
 
+      const toggleStartup = async (enabled) => {
+        setBusy('startup')
+        setError('')
+        try {
+          const result = await request('/startup', { body: JSON.stringify({ enabled }) })
+          setStatus((current) => ({ ...(current || {}), autoStart: result.autoStart }))
+        } catch (err) {
+          setError(err.message || String(err))
+        } finally {
+          setBusy('')
+        }
+      }
+
       const check = async () => {
         setBusy('check')
         setError('')
@@ -179,6 +194,16 @@ window.__ModuleLoader__.load({
           disabled: !available || busy === 'ball',
           label: copy.enable,
           onChange: toggleBall,
+        })),
+
+        React.createElement(Row, {
+          label: copy.startup,
+          hint: copy.startupHint,
+        }, React.createElement(Switch, {
+          checked: available ? status.autoStart === true : false,
+          disabled: !available || status.autoStart === null || busy === 'startup',
+          label: copy.startup,
+          onChange: toggleStartup,
         })),
 
         React.createElement(Row, {
