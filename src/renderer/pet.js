@@ -310,7 +310,13 @@ function renderUpdate(info) {
   // finished (or failed) update is visible the first time the panel is opened.
   const last = info.last;
   if (last && last.ok) updateHint.textContent = `已更新到 v${last.version}；重启 DSH 生效`;
-  else if (last && last.ok === false) updateHint.textContent = `上次更新 v${last.version} 没成功（退出码 ${last.code}），可以再试`;
+  else if (last && last.ok === false) {
+    const why = last.reason === 'helper-running'
+      ? '还有悬浮球相关进程在跑，为避免只装一半，安装已中止（安装没有被改动）'
+      : `安装没成功（退出码 ${last.code}）`;
+    updateHint.textContent = `上次更新 v${last.version} 未完成：${why}。可以直接再试一次`;
+    if (last.recovery) updateHint.textContent += `；万一 DSH 起不来，依次执行：${last.recovery.replace(/\n/g, ' ')}`;
+  }
 }
 
 checkUpdateBtn.addEventListener('click', async () => {
@@ -342,7 +348,7 @@ checkUpdateBtn.addEventListener('click', async () => {
 applyUpdateBtn.addEventListener('click', async () => {
   if (!pendingRelease || !updateAuto) return;
   applyUpdateBtn.disabled = true;
-  updateHint.textContent = `正在下载 v${pendingRelease.latest}…下载完悬浮球会退出`;
+  updateHint.textContent = `正在下载 v${pendingRelease.latest}…下载完悬浮球会退出，期间请勿重开 DSH`;
   const result = await api.applyUpdate(pendingRelease);
   if (!result || !result.ok) {
     applyUpdateBtn.disabled = false;

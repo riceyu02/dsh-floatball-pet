@@ -1395,6 +1395,17 @@ function registerIpc() {
    */
   ipcMain.handle('pet:update-apply', async (_event, release) => {
     try {
+      // The focus helper is a detached process running this package's own executable, so
+      // it keeps runtime\ locked after this process exits. Stopping it here is what lets
+      // the installer's wait finish in a second or two instead of timing out — and the
+      // installer refuses to install while anything out of the package is still alive,
+      // because a half-replaced package is a profile DSH cannot boot from.
+      try {
+        await dsh.stopFocusAgent();
+        log('focus helper stopped for the update');
+      } catch (error) {
+        log('could not stop the focus helper', error.message);
+      }
       const staged = await update.stageAndApply(release, lastProbe.exePath);
       log('update staged', staged.version, staged.tarball);
       setTimeout(() => app.quit(), 1200);

@@ -163,36 +163,112 @@ function download(url, destination, onProgress) {
 }
 
 /**
- * The detached installer. Written as a file because it has to outlive this process:
- * it waits for the pet to exit (that is what releases the file locks pnpm needs) and
- * then runs the DSH CLI, recording the outcome where the next start can read it.
+ * The detached installer. Written as a file because it has to outlive the pet: it waits
+ * for everything running out of the package to exit (that is what releases the file
+ * locks pnpm needs) and then runs the DSH CLI, recording the outcome where the next
+ * start can read it.
+ *
+ * Three lessons from a tester's failed 0.2.6 → 0.2.7 run, which left the profile in a
+ * state DSH could not even boot from:
+ *
+ *  1. Waiting for the pet's pid alone is not enough. The focus helper is a *detached*
+ *     process running the package's own `runtime\DSH悬浮球.exe` (as Node), and it
+ *     outlives the pet by design — so `runtime\` stayed locked and pnpm's importPackage
+ *     failed with EPERM. What matters is "no process is running out of this package",
+ *     which is what this enumerates.
+ *  2. Running out of time must ABORT. The old script fell through its wait loop and
+ *     installed anyway, which is the one case where EPERM is guaranteed.
+ *  3. A failed import leaves the package gutted (only `runtime\` left), plus an orphan
+ *     `<name>_tmp_*` directory and a manifest/lockfile pair that disagree — DSH then
+ *     cannot resolve the bundle. So verify the result, clean up and try once more, and
+ *     always record the recovery commands.
  */
-const APPLY_SCRIPT = `'use strict';
-const { spawnSync } = require('node:child_process');
-const fs = require('node:fs');
-const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const write = (payload) => fs.writeFileSync(config.statusPath, JSON.stringify(payload, null, 2));
-
-(async () => {
-  const deadline = Date.now() + 60000;
-  while (Date.now() < deadline) {
-    try { process.kill(config.pid, 0); } catch { break; }
-    await sleep(400);
-  }
-  const result = spawnSync('cmd.exe', ['/c', config.cli, 'plugin', '--profile', config.profile, 'add', config.tgz], {
-    encoding: 'utf8',
-    windowsHide: true,
-  });
-  write({
-    at: Date.now(),
-    version: config.version,
-    ok: result.status === 0,
-    code: result.status,
-    output: ((result.stdout || '') + (result.stderr || '')).slice(-4000),
-  });
-})();
-`;
+const APPLY_SCRIPT = [
+  "'use strict';",
+  "const { spawnSync } = require('node:child_process');",
+  "const fs = require('node:fs');",
+  "const path = require('node:path');",
+  "const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));",
+  "const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));",
+  "const write = (payload) => fs.writeFileSync(config.statusPath, JSON.stringify(payload, null, 2));",
+  "",
+  "/** Ids of every process whose executable lives inside the package we replace. */",
+  "function processesInPackage() {",
+  "  const script = \"Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith('\" + config.packageDir + \"', 'OrdinalIgnoreCase') } | ForEach-Object { $_.Id }\";",
+  "  const probe = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', windowsHide: true });",
+  "  return (probe.stdout || '').split(/\\s+/).filter(Boolean).map(Number).filter((id) => id > 0);",
+  "}",
+  "",
+  "function install() {",
+  "  return spawnSync('cmd.exe', ['/c', config.cli, 'plugin', '--profile', config.profile, 'add', config.tgz], { encoding: 'utf8', windowsHide: true });",
+  "}",
+  "",
+  "/** DSH resolves the bundle out of these three things; without them it will not boot. */",
+  "function packageIntact() {",
+  "  try {",
+  "    const manifest = JSON.parse(fs.readFileSync(path.join(config.packageDir, 'package.json'), 'utf8'));",
+  "    const patch = manifest.dsh && manifest.dsh.bundle && manifest.dsh.bundle.patch;",
+  "    if (!patch) return false;",
+  "    return fs.existsSync(path.join(config.packageDir, 'cordis.patch.yml'))",
+  "      && fs.existsSync(path.join(config.packageDir, 'plugin', 'host.mjs'));",
+  "  } catch {",
+  "    return false;",
+  "  }",
+  "}",
+  "",
+  "function cleanUp() {",
+  "  for (const pid of processesInPackage()) { try { process.kill(pid); } catch { } }",
+  "  try { fs.rmSync(config.packageDir, { recursive: true, force: true }); } catch { }",
+  "  try {",
+  "    const prefix = path.basename(config.packageDir) + '_tmp_';",
+  "    for (const entry of fs.readdirSync(config.nodeModulesDir)) {",
+  "      if (entry.startsWith(prefix)) {",
+  "        try { fs.rmSync(path.join(config.nodeModulesDir, entry), { recursive: true, force: true }); } catch { }",
+  "      }",
+  "    }",
+  "  } catch { }",
+  "}",
+  "",
+  "(async () => {",
+  "  const deadline = Date.now() + 45000;",
+  "  let alive = processesInPackage();",
+  "  while (alive.length && Date.now() < deadline) {",
+  "    await sleep(500);",
+  "    alive = processesInPackage();",
+  "  }",
+  "  if (alive.length) {",
+  "    write({",
+  "      at: Date.now(),",
+  "      version: config.version,",
+  "      ok: false,",
+  "      reason: 'helper-running',",
+  "      pids: alive,",
+  "      recovery: config.recovery,",
+  "    });",
+  "    return;",
+  "  }",
+  "",
+  "  let result = install();",
+  "  if (result.status !== 0 || !packageIntact()) {",
+  "    await sleep(800);",
+  "    cleanUp();",
+  "    await sleep(800);",
+  "    result = install();",
+  "  }",
+  "",
+  "  const ok = result.status === 0 && packageIntact();",
+  "  write({",
+  "    at: Date.now(),",
+  "    version: config.version,",
+  "    ok,",
+  "    code: result.status,",
+  "    reason: ok ? null : (packageIntact() ? 'install-failed' : 'package-incomplete'),",
+  "    recovery: ok ? null : config.recovery,",
+  "    output: ((result.stdout || '') + (result.stderr || '')).slice(-4000),",
+  "  });",
+  "})();",
+  "",
+].join('\n');
 
 /**
  * Download the release tarball into the profile and schedule its installation.
@@ -221,14 +297,24 @@ async function stageAndApply(release, dshExePath, onProgress) {
   const userData = process.env.DSH_PET_USER_DATA || path.dirname(target);
   const configPath = path.join(userData, 'apply-update.json');
   const statusPath = path.join(userData, 'update-status.json');
+  const profile = path.basename(profileDir());
+  const nodeModulesDir = path.join(profileDir(), 'node_modules');
+  const packageDir = path.join(nodeModulesDir, 'dsh-desktop-pet');
   fs.mkdirSync(userData, { recursive: true });
   fs.writeFileSync(configPath, JSON.stringify({
     pid: process.pid,
     cli,
-    profile: path.basename(profileDir()),
+    profile,
     tgz: target,
     version: release.latest,
     statusPath,
+    nodeModulesDir,
+    packageDir,
+    recovery: [
+      '① 确认没有 DSH悬浮球 进程在跑（托盘退出不够，焦点帮手是独立进程）',
+      `② 删除 ${packageDir} 与 ${nodeModulesDir}\\dsh-desktop-pet_tmp_*`,
+      `③ 重新安装：dsh plugin --profile ${profile} add "${target}"`,
+    ].join('\n'),
   }, null, 2));
   const scriptPath = path.join(userData, 'apply-update.cjs');
   fs.writeFileSync(scriptPath, APPLY_SCRIPT);
