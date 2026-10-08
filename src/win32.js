@@ -40,6 +40,24 @@ const SWP_NOMOVE = 0x2;
 const SWP_NOACTIVATE = 0x10;
 const FLAGS = SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE;
 
+/**
+ * Windows that cover the whole display without being "a game or a video in front of
+ * you": the desktop itself, the taskbar, the Start menu, the alt-tab switcher and their
+ * friends. Their rectangles are as large as a full-screen game's, so the rectangle test
+ * alone would keep the pet tucked away after a Win-key press — measured report: "press
+ * Win, open any window over a running game, and the ball never comes back".
+ */
+const SHELL_CLASSES = new Set([
+  'progman', 'workerw', 'shell_traywnd', 'shell_secondarytraywnd',
+  'windows.ui.core.corewindow', 'xamlexplorerhostislandwindow',
+  'multitaskingviewframe', 'tasklistthumbnailwnd', 'tasklistwnd',
+  'foregroundstaging', 'applicationmanager_desktopshellwindow',
+  'start', 'searchpane', 'windows.internal.shell.tabproxywindow',
+  'shell_inputswitchtoplevelwindow', 'shell_charmwindow', 'sysshadow',
+  'edgeuiinputtopwndclass', 'narratorhelperwindow', 'taskSwitcherWnd'.toLowerCase(),
+  'windowstrackingsystem', 'msctfime ui', 'default ime',
+]);
+
 let api = null;
 let loaded = false;
 
@@ -57,6 +75,7 @@ function load() {
         setWindowPos: user32.func('bool SetWindowPos(void *h, void *after, int x, int y, int cx, int cy, unsigned int flags)'),
         getForegroundWindow: user32.func('void *GetForegroundWindow()'),
         getWindowRect: user32.func('bool GetWindowRect(void *h, _Out_ int *rect)'),
+        getClassName: user32.func('int GetClassNameA(void *h, _Out_ char *buffer, int count)'),
       };
       return api;
     } catch {
@@ -105,24 +124,63 @@ function ensureTopmost(hwnd) {
   return setTopmost(hwnd, true);
 }
 
+/** Class name of a window handle, lower-cased; empty when it cannot be read. */
+function classNameOf(hwnd) {
+  const found = load();
+  if (!found || hwnd === null) return '';
+  const buffer = Buffer.alloc(256);
+  const length = found.getClassName(hwnd, buffer, buffer.length);
+  if (!length) return '';
+  return buffer.toString('latin1', 0, length).toLowerCase();
+}
+
 /**
  * Is the foreground window an unrelated window covering that whole display?
- * The usual "a game or a video is running full screen" test: the rectangle covers the
- * display bounds, not merely its work area, and it is not our own window.
+ *
+ * The usual "a game or a video is running full screen" test — rectangle covers the
+ * display bounds (not merely its work area) — plus two exclusions that matter in
+ * practice: our own window, and the Windows shell. The desktop, the taskbar, the Start
+ * menu and the alt-tab switcher all report full-screen rectangles, so without the class
+ * filter the pet would stay hidden after a Win-key press instead of coming back.
+ *
+ * @param {{x:number,y:number,width:number,height:number}} bounds display to test against
+ * @param {bigint|null} ownHwnd the pet's own window, never "full screen in front of us"
+ * @returns {{covered:boolean, className:string, rect:number[]|null}} what it decided and why
  */
-function foregroundCovers(bounds, ownHwnd) {
+function foregroundFullscreen(bounds, ownHwnd) {
   const found = load();
-  if (!found) return false;
+  if (!found) return { covered: false, className: '', rect: null };
   const foreground = found.getForegroundWindow();
-  if (!foreground || (ownHwnd !== null && foreground === ownHwnd)) return false;
+  if (!foreground || (ownHwnd !== null && foreground === ownHwnd)) {
+    return { covered: false, className: '', rect: null };
+  }
+  const className = classNameOf(foreground);
+  if (SHELL_CLASSES.has(className)) return { covered: false, className, rect: null };
+
   const rect = [0, 0, 0, 0];
-  if (!found.getWindowRect(foreground, rect)) return false;
+  if (!found.getWindowRect(foreground, rect)) return { covered: false, className, rect: null };
   const [left, top, right, bottom] = rect;
   const tolerance = 2;
-  return left <= bounds.x + tolerance
+  const covered = left <= bounds.x + tolerance
     && top <= bounds.y + tolerance
     && right >= bounds.x + bounds.width - tolerance
     && bottom >= bounds.y + bounds.height - tolerance;
+  return { covered, className, rect };
 }
 
-module.exports = { available, source, isTopmost, setTopmost, ensureTopmost, foregroundCovers, handleOf };
+/** Kept for callers that only want the yes/no answer. */
+function foregroundCovers(bounds, ownHwnd) {
+  return foregroundFullscreen(bounds, ownHwnd).covered;
+}
+
+module.exports = {
+  available,
+  source,
+  isTopmost,
+  setTopmost,
+  ensureTopmost,
+  foregroundCovers,
+  foregroundFullscreen,
+  classNameOf,
+  handleOf,
+};

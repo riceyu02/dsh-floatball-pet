@@ -230,6 +230,8 @@ let keepOnTopTimer = null;
 // How often the native guardian reads the real topmost bit. Hovering rewrites the
 // window style, so this has to be well under a second to keep the ball from flickering.
 const TOPMOST_GUARD_MS = 250;
+// While the ball is in hand every frame moves and restyles the window.
+const TOPMOST_GUARD_DRAG_MS = 60;
 let topmostGuardTimer = null;
 /** True while a full-screen window is in front — the pet then deliberately stays behind it. */
 let topmostSuppressed = false;
@@ -530,13 +532,42 @@ function commitWindowBox(box, layout) {
   }
   if (heldBox) { heldBox = box; return; }
   win.setBounds(box);
+  reassertTopmostSoon();
 }
 
 function releaseHeldBox() {
   if (heldTimer) { clearTimeout(heldTimer); heldTimer = null; }
   const box = heldBox;
   heldBox = null;
-  if (box && win && !win.isDestroyed()) win.setBounds(box);
+  if (box && win && !win.isDestroyed()) { win.setBounds(box); reassertTopmostSoon(); }
+}
+
+/**
+ * Put the topmost bit back right after something we did may have dropped it.
+ *
+ * Both moving the window and changing its click-through style make Chromium re-apply
+ * the extended window style, and the topmost bit does not survive that. Measured
+ * consequence while dragging the ball over another window: the bit is gone within a
+ * frame or two of the move, and on 0.2.8 nothing noticed until the 15 s check — the ball
+ * sank to the bottom a few seconds into the drag. A 250 ms guardian is still too slow
+ * against a style rewrite that happens per frame, so every move re-asserts natively
+ * (a read when the bit is fine; a write only when it is not) and checks once more 40 ms
+ * later, which is after the deferred rewrite has landed.
+ */
+function reassertTopmostSoon() {
+  if (!win32.available() || !win || win.isDestroyed() || topmostSuppressed) return;
+  let handle;
+  try {
+    handle = win32.handleOf(win.getNativeWindowHandle());
+  } catch {
+    return;
+  }
+  win32.ensureTopmost(handle);
+  const timer = setTimeout(() => {
+    if (!win || win.isDestroyed() || topmostSuppressed) return;
+    win32.ensureTopmost(handle);
+  }, 40);
+  timer.unref?.();
 }
 
 function applyLayout() {
@@ -610,6 +641,9 @@ function applyPointerMode(interactive) {
   if (interactive === pointerInteractive || !win || win.isDestroyed()) return;
   pointerInteractive = interactive;
   win.setIgnoreMouseEvents(!interactive, { forward: true });
+  // Changing the click-through style is the other rewrite that costs us the topmost
+  // bit — hover in, hover out, drag start. See reassertTopmostSoon.
+  reassertTopmostSoon();
 }
 
 /**
@@ -1120,12 +1154,14 @@ function createWindow() {
   // not there the 15 s PowerShell net above is all we have.
   if (win32.available()) {
     log('topmost guardian active via', win32.source());
-    topmostGuardTimer = setInterval(() => {
-      if (!win || win.isDestroyed()) return;
+    const guardTick = () => {
+      if (!win || win.isDestroyed()) { topmostGuardTimer = null; return; }
       let handle;
       try {
         handle = win32.handleOf(win.getNativeWindowHandle());
       } catch {
+        topmostGuardTimer = setTimeout(guardTick, TOPMOST_GUARD_MS);
+        topmostGuardTimer.unref?.();
         return;
       }
       const bounds = screen.getDisplayNearestPoint({
@@ -1134,20 +1170,24 @@ function createWindow() {
       }).bounds;
       // A game or a video covering the whole display: stop being on top, so the pet
       // gets out of its way instead of drawing over it. It comes back by itself once
-      // that window is no longer in front.
-      const covered = win32.foregroundCovers(bounds, handle);
-      if (covered !== topmostSuppressed) {
-        topmostSuppressed = covered;
-        log(covered
-          ? 'a full-screen window is in front — topmost dropped'
-          : 'full-screen window gone — topmost restored');
+      // that window is no longer in front — including when the foreground turns out to
+      // be the desktop, the taskbar or the Start menu, which are excluded by class
+      // because their rectangles are just as large.
+      const front = win32.foregroundFullscreen(bounds, handle);
+      if (front.covered !== topmostSuppressed) {
+        topmostSuppressed = front.covered;
+        log(front.covered
+          ? `a full-screen window is in front — topmost dropped (class=${front.className})`
+          : `full-screen window gone — topmost restored (class=${front.className || 'none'})`);
       }
-      if (topmostSuppressed) {
-        win32.setTopmost(handle, false);
-        return;
-      }
-      win32.ensureTopmost(handle);
-    }, TOPMOST_GUARD_MS);
+      if (topmostSuppressed) win32.setTopmost(handle, false);
+      else win32.ensureTopmost(handle);
+      // Dragging moves and restyles the window on every frame, so the bit needs a much
+      // tighter loop than when the pet is sitting still.
+      topmostGuardTimer = setTimeout(guardTick, dragging ? TOPMOST_GUARD_DRAG_MS : TOPMOST_GUARD_MS);
+      topmostGuardTimer.unref?.();
+    };
+    topmostGuardTimer = setTimeout(guardTick, TOPMOST_GUARD_MS);
     topmostGuardTimer.unref?.();
   } else {
     log('koffi not available — topmost keeps the slow native check only');
