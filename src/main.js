@@ -198,6 +198,9 @@ let balanceTimer = null;
 let processTimer = null;
 let cursorTimer = null;
 let sizeTimer = null;
+// How often the always-on-top band is re-asserted; see the watchdog in createWindow.
+const KEEP_ON_TOP_MS = 3000;
+let keepOnTopTimer = null;
 let lastSizeTick = 0;
 let dragDirty = false;
 /**
@@ -1045,6 +1048,19 @@ function createWindow() {
     win.webContents.send('pet:snapshot', snapshot());
   });
 
+  // Windows drops a topmost window out of the topmost band when something else takes
+  // the foreground — another always-on-top window, a full-screen app, or a shell
+  // utility that manages z-order. Nothing notifies us, and `isAlwaysOnTop()` only
+  // reports the flag we set ourselves, so re-assert on a slow timer. `moveTop` is a
+  // no-activate reposition, so this never steals focus. Reported symptom without it:
+  // on some machines the ball sits behind every other window.
+  keepOnTopTimer = setInterval(() => {
+    if (!win || win.isDestroyed() || !win.isVisible()) return;
+    win.setAlwaysOnTop(true, 'floating');
+    win.moveTop();
+  }, KEEP_ON_TOP_MS);
+  keepOnTopTimer.unref?.();
+
   win.on('closed', () => { win = null; });
 
   // Keep the pet reachable when displays change.
@@ -1583,6 +1599,7 @@ if (!app.requestSingleInstanceLock()) {
     clearInterval(cursorTimer);
     clearInterval(sizeTimer);
     clearInterval(pluginHostTimer);
+    clearInterval(keepOnTopTimer);
     saveNow();
     dsh.stopFocusAgent();
   });
