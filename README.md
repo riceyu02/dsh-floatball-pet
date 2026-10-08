@@ -67,7 +67,7 @@ DeepSeek Harness 窗口**。
 
 | 方式 | 对方需要 | 代价 |
 |---|---|---|
-| 直接把 `dsh-desktop-pet-0.2.3.tgz` 发给他，用**本地路径**装 | 只要能收到文件 | 113 MB，装完即用，不联网、不构建、不放行 |
+| 直接把 `dsh-desktop-pet-0.2.4.tgz` 发给他，用**本地路径**装 | 只要能收到文件 | 113 MB，装完即用，不联网、不构建、不放行 |
 | **方式一**（Release 地址） | 能连 `github.com` | 113 MB 下载 |
 | **方式二**（仓库地址） | 能连 `github.com`、`git` 在 PATH、放行构建脚本、能下 Electron | ~600 MB、几分钟，且换 commit 要再放行一次 |
 
@@ -76,17 +76,17 @@ DeepSeek Harness 窗口**。
 ### 方式一：装 Release 里的安装包（推荐，不需要编译）
 
 1. 到 [Releases](https://github.com/riceyu02/dsh-desktop-pet/releases) 下载
-   `dsh-desktop-pet-0.2.3.tgz`（约 113 MB，内含完整 Electron 运行时，装完无需联网再下载）。
+   `dsh-desktop-pet-0.2.4.tgz`（约 113 MB，内含完整 Electron 运行时，装完无需联网再下载）。
 2. 安装进桌面版实际使用的 `desktop` profile：
 
    ```powershell
-   dsh plugin --profile desktop add "$env:USERPROFILE\Downloads\dsh-desktop-pet-0.2.3.tgz"
+   dsh plugin --profile desktop add "$env:USERPROFILE\Downloads\dsh-desktop-pet-0.2.4.tgz"
    ```
 
    也可以直接给下载地址，让 DSH 自己去取：
 
    ```powershell
-   dsh plugin --profile desktop add https://github.com/riceyu02/dsh-desktop-pet/releases/download/v0.2.3/dsh-desktop-pet-0.2.3.tgz
+   dsh plugin --profile desktop add https://github.com/riceyu02/dsh-desktop-pet/releases/download/v0.2.4/dsh-desktop-pet-0.2.4.tgz
    ```
 
 3. **完全退出并重新打开 DSH**，悬浮球就会出现。
@@ -94,14 +94,14 @@ DeepSeek Harness 窗口**。
 ### 方式二：直接用 GitHub 仓库安装（不需要 Release）
 
 ```powershell
-dsh plugin --profile desktop add git+https://github.com/riceyu02/dsh-desktop-pet.git#v0.2.3
+dsh plugin --profile desktop add git+https://github.com/riceyu02/dsh-desktop-pet.git#v0.2.4
 ```
 
 前置条件：**`git` 必须在 PATH 上**（pnpm 靠它取仓库）。用 `git+https://…` 而不是 `github:` 简写
 ——后者会被解析成 `git+ssh://git@github.com/…`，没有配 SSH key 的机器会直接
 `Host key verification failed`。
 
-**建议钉一个 tag（如上面的 `#v0.2.3`），不要跟着 `main` 走。** 原因见下：放行的键里带着 commit，
+**建议钉一个 tag（如上面的 `#v0.2.4`），不要跟着 `main` 走。** 原因见下：放行的键里带着 commit，
 跟 `main` 意味着插件每更新一次，装的人就要重新放行一次；钉 tag 则一个版本只需放行一次。
 
 这条路径不下载预编译包，而是在你机器上现装依赖、现组装 Electron 运行时（约 500 MB，几分钟）。
@@ -124,8 +124,8 @@ allowBuilds:
 git clone https://github.com/riceyu02/dsh-desktop-pet.git
 cd dsh-desktop-pet
 npm install                      # 若 Electron 下载慢，先设镜像，见「常见问题」
-npm run build:dsh-plugin         # 产出 artifacts\dsh-desktop-pet-0.2.3.tgz
-dsh plugin --profile desktop add "$PWD\artifacts\dsh-desktop-pet-0.2.3.tgz"
+npm run build:dsh-plugin         # 产出 artifacts\dsh-desktop-pet-0.2.4.tgz
+dsh plugin --profile desktop add "$PWD\artifacts\dsh-desktop-pet-0.2.4.tgz"
 ```
 
 ### 让 DSH 的 AI 帮你装（把下面这段发给它就行）
@@ -134,12 +134,12 @@ DSH 的 agent 手上有插件管理接口，能自己装完这一套：下载、
 把下面这段连同链接（或文件）发给对方的 DSH 即可：
 
 > 帮我装这个插件：`https://github.com/riceyu02/dsh-desktop-pet`
-> 用 Release **v0.2.3** 里的 `dsh-desktop-pet-0.2.3.tgz`，装进 `desktop` profile。
+> 用 Release **v0.2.4** 里的 `dsh-desktop-pet-0.2.4.tgz`，装进 `desktop` profile。
 > 需要放行构建脚本就先问我；装完告诉我结果。
 
 对方网络连不上 `github.com` 时，改成把 tgz 直接发给他：
 
-> 这是我给你的插件包 `dsh-desktop-pet-0.2.3.tgz`（DSH 悬浮球桌宠），帮我装进 `desktop` profile。
+> 这是我给你的插件包 `dsh-desktop-pet-0.2.4.tgz`（DSH 悬浮球桌宠），帮我装进 `desktop` profile。
 
 会发生什么：
 

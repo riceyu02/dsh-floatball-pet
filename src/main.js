@@ -190,6 +190,27 @@ if (PLUGIN_MANAGED) store.data.autoStart = false;
 
 let win = null;
 let tray = null;
+
+/**
+ * Put the pet back into the topmost band, without stealing focus.
+ *
+ * Toggling is deliberate. `setAlwaysOnTop(true, 'floating')` alone is a no-op once
+ * Chromium believes the window is already always-on-top — it returns without a native
+ * call, so it cannot restore a `WS_EX_TOPMOST` bit that Win32 has cleared. The toggle
+ * forces HWND_NOTOPMOST followed by HWND_TOPMOST, which leaves the bit set.
+ *
+ * `win.moveTop()` must never be used for this: stacking this layered, non-activatable
+ * window at HWND_TOP is exactly what clears the bit (measured on 0.2.3 — the ball
+ * surfaced above the browser for a moment and then sank behind the next activated
+ * window). `win.isAlwaysOnTop()` is no help either: it reports the cached flag, not
+ * the real window style.
+ */
+function assertOnTop() {
+  if (!win || win.isDestroyed()) return;
+  win.setAlwaysOnTop(false);
+  win.setAlwaysOnTop(true, 'floating');
+}
+
 let metrics = { ...PANEL_FALLBACK };
 let display = null;
 let lastProbe = { running: false, seconds: null, startedAt: null, exePath: null };
@@ -608,10 +629,9 @@ function recoverAfterWake(reason) {
     store.data.centerX = centre.centerX;
     store.data.centerY = centre.centerY;
 
-    // Re-assert stacking and visibility. `moveTop` rather than `show`: the window is
-    // already visible, and show() would steal focus from whatever is in front.
-    win.setAlwaysOnTop(true, 'floating');
-    win.moveTop();
+    // Re-assert stacking and visibility, without stealing focus. See assertOnTop for
+    // why this is a toggle and why `moveTop` must not be used.
+    assertOnTop();
 
     // Force one real resize so Chromium re-lays out and re-composites. A window whose
     // display was turned off can come back holding a stale surface.
@@ -1032,7 +1052,9 @@ function createWindow() {
     },
   });
 
-  win.setAlwaysOnTop(true, 'floating');
+  // Not setAlwaysOnTop alone: the constructor option may not have reached Win32, and a
+  // cached "already on top" makes the plain call a no-op. See assertOnTop.
+  assertOnTop();
   win.setIgnoreMouseEvents(true, { forward: true });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'), {
     query: { debug: process.env.PET_DEBUG ? '1' : '0' },
@@ -1050,14 +1072,12 @@ function createWindow() {
 
   // Windows drops a topmost window out of the topmost band when something else takes
   // the foreground — another always-on-top window, a full-screen app, or a shell
-  // utility that manages z-order. Nothing notifies us, and `isAlwaysOnTop()` only
-  // reports the flag we set ourselves, so re-assert on a slow timer. `moveTop` is a
-  // no-activate reposition, so this never steals focus. Reported symptom without it:
-  // on some machines the ball sits behind every other window.
+  // utility that manages z-order. Nothing notifies us, so re-assert on a slow timer.
+  // See assertOnTop for why it toggles and why `moveTop` must never be used here.
+  assertOnTop();
   keepOnTopTimer = setInterval(() => {
     if (!win || win.isDestroyed() || !win.isVisible()) return;
-    win.setAlwaysOnTop(true, 'floating');
-    win.moveTop();
+    assertOnTop();
   }, KEEP_ON_TOP_MS);
   keepOnTopTimer.unref?.();
 
@@ -1079,7 +1099,7 @@ function createTray() {
   tray = new Tray(icon);
   tray.setToolTip('DSH 悬浮球');
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: '显示 / 置顶悬浮球', click: () => { if (win) { win.showInactive(); win.setAlwaysOnTop(true, 'floating'); } } },
+    { label: '显示 / 置顶悬浮球', click: () => { if (win) { win.showInactive(); assertOnTop(); } } },
     { label: '打开 DeepSeek Harness', click: () => { dsh.openDsh(lastProbe).then(push); } },
     { type: 'separator' },
     {
@@ -1094,7 +1114,7 @@ function createTray() {
     { type: 'separator' },
     { label: PLUGIN_MANAGED ? '本次关闭悬浮球' : '退出', click: () => app.quit() },
   ]));
-  tray.on('click', () => { if (win) { win.showInactive(); win.setAlwaysOnTop(true, 'floating'); } });
+  tray.on('click', () => { if (win) { win.showInactive(); assertOnTop(); } });
 }
 
 function applyAutoStart(enabled) {
@@ -1509,7 +1529,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (win) { win.showInactive(); win.setAlwaysOnTop(true, 'floating'); }
+    if (win) { win.showInactive(); assertOnTop(); }
   });
 
   app.whenReady().then(() => {
