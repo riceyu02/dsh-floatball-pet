@@ -54,6 +54,7 @@ if (!process.argv.includes('--no-sandbox') && process.env.DSH_PET_NO_SANDBOX) {
 
 const dsh = require('./dsh');
 const update = require('./update');
+const win32 = require('./win32');
 const { Store } = require('./store');
 const { makeIconPng } = require('./icon');
 
@@ -211,7 +212,7 @@ let tray = null;
  *   * `win.isAlwaysOnTop()` reports Chromium's cached flag, never the real style.
  */
 function assertOnTop() {
-  if (!win || win.isDestroyed()) return;
+  if (!win || win.isDestroyed() || topmostSuppressed) return;
   win.setAlwaysOnTop(true, 'floating');
 }
 
@@ -226,6 +227,12 @@ let sizeTimer = null;
 // How often the always-on-top band is re-asserted; see the watchdog in createWindow.
 const KEEP_ON_TOP_MS = 3000;
 let keepOnTopTimer = null;
+// How often the native guardian reads the real topmost bit. Hovering rewrites the
+// window style, so this has to be well under a second to keep the ball from flickering.
+const TOPMOST_GUARD_MS = 250;
+let topmostGuardTimer = null;
+/** True while a full-screen window is in front — the pet then deliberately stays behind it. */
+let topmostSuppressed = false;
 let lastSizeTick = 0;
 let dragDirty = false;
 /**
@@ -1095,7 +1102,7 @@ function createWindow() {
   assertOnTop();
   let keepOnTopTicks = 0;
   const enforceTopmost = async () => {
-    if (!win || win.isDestroyed()) return;
+    if (!win || win.isDestroyed() || topmostSuppressed) return;
     try {
       const handle = win.getNativeWindowHandle();
       const hwnd = handle.length >= 8 ? handle.readBigUInt64LE(0) : BigInt(handle.readUInt32LE(0));
@@ -1105,6 +1112,46 @@ function createWindow() {
       log('topmost check failed', error.message);
     }
   };
+
+  // The native guardian. Hovering changes the mouse-pass-through style, and Chromium
+  // re-applies the whole extended style when it does — which is what clears the topmost
+  // bit and makes the ball flicker. Catching that needs a check a few times a second,
+  // which only an in-process call can afford; koffi makes it possible, and when it is
+  // not there the 15 s PowerShell net above is all we have.
+  if (win32.available()) {
+    log('topmost guardian active via', win32.source());
+    topmostGuardTimer = setInterval(() => {
+      if (!win || win.isDestroyed()) return;
+      let handle;
+      try {
+        handle = win32.handleOf(win.getNativeWindowHandle());
+      } catch {
+        return;
+      }
+      const bounds = screen.getDisplayNearestPoint({
+        x: Math.round(store.data.centerX || 0),
+        y: Math.round(store.data.centerY || 0),
+      }).bounds;
+      // A game or a video covering the whole display: stop being on top, so the pet
+      // gets out of its way instead of drawing over it. It comes back by itself once
+      // that window is no longer in front.
+      const covered = win32.foregroundCovers(bounds, handle);
+      if (covered !== topmostSuppressed) {
+        topmostSuppressed = covered;
+        log(covered
+          ? 'a full-screen window is in front — topmost dropped'
+          : 'full-screen window gone — topmost restored');
+      }
+      if (topmostSuppressed) {
+        win32.setTopmost(handle, false);
+        return;
+      }
+      win32.ensureTopmost(handle);
+    }, TOPMOST_GUARD_MS);
+    topmostGuardTimer.unref?.();
+  } else {
+    log('koffi not available — topmost keeps the slow native check only');
+  }
   keepOnTopTimer = setInterval(() => {
     if (!win || win.isDestroyed() || !win.isVisible()) return;
     assertOnTop();
@@ -1700,6 +1747,7 @@ if (!app.requestSingleInstanceLock()) {
     clearInterval(sizeTimer);
     clearInterval(pluginHostTimer);
     clearInterval(keepOnTopTimer);
+    clearInterval(topmostGuardTimer);
     saveNow();
     dsh.stopFocusAgent();
   });
