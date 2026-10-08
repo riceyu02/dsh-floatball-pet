@@ -23,6 +23,8 @@ const { spawn } = require('node:child_process');
 const REPO = 'riceyu02/dsh-desktop-pet';
 const API_LATEST = `https://api.github.com/repos/${REPO}/releases/latest`;
 const REQUEST_TIMEOUT_MS = 20000;
+/** Installers to keep: the installed version plus the one before it (offline rollback). */
+const KEEP_INSTALLERS = 2;
 
 /** The version this build carries: the manifest packed beside the app. */
 function currentVersion() {
@@ -216,6 +218,47 @@ const APPLY_SCRIPT = [
   "  }",
   "}",
   "",
+  "/**",
+  " * Delete the installers of versions we have moved past (113 MB each).",
+  " * The file the profile manifest now points at is never touched — removing that would",
+  " * break the next `pnpm install` — and neither are the newest couple, which are the",
+  " * offline rollback. If the manifest cannot be read, nothing is deleted at all.",
+  " */",
+  "function cleanOldInstalls() {",
+  "  const dir = config.tarballDir;",
+  "  const removed = [];",
+  "  try {",
+  "    if (!dir || !fs.existsSync(dir)) return removed;",
+  "    const manifest = JSON.parse(fs.readFileSync(path.join(config.profileDir, 'package.json'), 'utf8'));",
+  "    const spec = manifest.dependencies && manifest.dependencies['dsh-desktop-pet'];",
+  "    if (typeof spec !== 'string' || !spec.startsWith('file:')) return removed;",
+  "    const protectedPaths = [path.resolve(config.profileDir, spec.slice('file:'.length))];",
+  "    const prefix = 'dsh-desktop-pet-';",
+  "    const names = fs.readdirSync(dir)",
+  "      .filter((name) => /^dsh-desktop-pet-[0-9]+\\.[0-9]+\\.[0-9]+\\.tgz$/.test(name))",
+  "      .sort((a, b) => {",
+  "        const left = a.slice(prefix.length, -4).split('.').map(Number);",
+  "        const right = b.slice(prefix.length, -4).split('.').map(Number);",
+  "        for (let i = 0; i < 3; i += 1) {",
+  "          if ((left[i] || 0) !== (right[i] || 0)) return (right[i] || 0) - (left[i] || 0);",
+  "        }",
+  "        return 0;",
+  "      });",
+  "    for (const name of names.slice(0, config.keepInstallers || 2)) protectedPaths.push(path.resolve(dir, name));",
+  "    for (const name of names) {",
+  "      const full = path.resolve(dir, name);",
+  "      if (protectedPaths.includes(full)) continue;",
+  "      try { fs.rmSync(full, { force: true }); removed.push(name); } catch { }",
+  "    }",
+  "    for (const name of fs.readdirSync(dir)) {",
+  "      if (name.startsWith(prefix) && name.endsWith('.part')) {",
+  "        try { fs.rmSync(path.join(dir, name), { force: true }); removed.push(name); } catch { }",
+  "      }",
+  "    }",
+  "  } catch { }",
+  "  return removed;",
+  "}",
+  "",
   "function cleanUp() {",
   "  for (const pid of processesInPackage()) { try { process.kill(pid); } catch { } }",
   "  try { fs.rmSync(config.packageDir, { recursive: true, force: true }); } catch { }",
@@ -257,6 +300,10 @@ const APPLY_SCRIPT = [
   "  }",
   "",
   "  const ok = result.status === 0 && packageIntact();",
+  "  // Past versions are dead weight — 113 MB each, sitting in the profile people back",
+  "  // up. Only after a verified install, only files named after this package, and never",
+  "  // the one the manifest now points at (see cleanOldInstalls).",
+  "  const removed = ok ? cleanOldInstalls() : [];",
   "  write({",
   "    at: Date.now(),",
   "    version: config.version,",
@@ -264,6 +311,7 @@ const APPLY_SCRIPT = [
   "    code: result.status,",
   "    reason: ok ? null : (packageIntact() ? 'install-failed' : 'package-incomplete'),",
   "    recovery: ok ? null : config.recovery,",
+  "    removed,",
   "    output: ((result.stdout || '') + (result.stderr || '')).slice(-4000),",
   "  });",
   "})();",
@@ -310,6 +358,9 @@ async function stageAndApply(release, dshExePath, onProgress) {
     statusPath,
     nodeModulesDir,
     packageDir,
+    tarballDir,
+    profileDir: profileDir(),
+    keepInstallers: KEEP_INSTALLERS,
     recovery: [
       '① 确认没有 DSH悬浮球 进程在跑（托盘退出不够，焦点帮手是独立进程）',
       `② 删除 ${packageDir} 与 ${nodeModulesDir}\\dsh-desktop-pet_tmp_*`,
@@ -342,4 +393,83 @@ function lastResult(env = process.env) {
   }
 }
 
-module.exports = { currentVersion, compareVersions, checkLatest, stageAndApply, lastResult, profileDir };
+/** The tarball the profile manifest points at right now. */
+function installedTarball(env = process.env) {
+  const profile = profileDir(env);
+  if (!profile) return null;
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(profile, 'package.json'), 'utf8'));
+    const spec = manifest.dependencies && manifest.dependencies['dsh-desktop-pet'];
+    if (typeof spec !== 'string' || !spec.startsWith('file:')) return null;
+    return path.resolve(profile, spec.slice('file:'.length));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Delete the installers of versions we have moved past.
+ *
+ * Each one is a whole Electron runtime (113 MB), so a handful of updates leaves a
+ * gigabyte of dead weight in the profile — and the profile is the thing people back up.
+ *
+ * Safety rules, in order of importance:
+ *   * only files named after this package are considered at all;
+ *   * the tarball the profile manifest currently points at is never removed — deleting
+ *     that breaks the next `pnpm install` outright;
+ *   * when the manifest cannot be read, nothing is deleted;
+ *   * the newest `keep` files stay, because the one before the current version is the
+ *     offline rollback.
+ *
+ * @returns {{removed: string[], kept: string[]}} file names, for the log and the panel.
+ */
+function cleanupOldTarballs({ keep = KEEP_INSTALLERS, env = process.env } = {}) {
+  const directory = pluginTarballDir(env);
+  const profile = profileDir(env);
+  const nothing = { removed: [], kept: [] };
+  if (!directory || !profile || !fs.existsSync(directory)) return nothing;
+  if (!installedTarball(env)) return nothing; // no readable manifest: leave it alone
+
+  const protectedPaths = new Set([path.resolve(installedTarball(env))]);
+  const ours = fs.readdirSync(directory)
+    .filter((name) => /^dsh-desktop-pet-\d+\.\d+\.\d+\.tgz$/.test(name))
+    .map((name) => ({
+      name,
+      full: path.join(directory, name),
+      version: name.slice('dsh-desktop-pet-'.length, -'.tgz'.length),
+    }))
+    .sort((a, b) => compareVersions(b.version, a.version)); // newest first
+
+  for (const entry of ours.slice(0, keep)) protectedPaths.add(path.resolve(entry.full));
+
+  const removed = [];
+  for (const entry of ours) {
+    if (protectedPaths.has(path.resolve(entry.full))) continue;
+    try {
+      fs.rmSync(entry.full, { force: true });
+      removed.push(entry.name);
+    } catch {
+      // Locked or gone: not worth failing an update over.
+    }
+  }
+  // Half-downloaded files from an interrupted update.
+  for (const name of fs.readdirSync(directory)) {
+    if (name.startsWith('dsh-desktop-pet-') && name.endsWith('.part')) {
+      try {
+        fs.rmSync(path.join(directory, name), { force: true });
+        removed.push(name);
+      } catch { /* ignore */ }
+    }
+  }
+  return { removed, kept: ours.filter((e) => protectedPaths.has(path.resolve(e.full))).map((e) => e.name) };
+}
+
+module.exports = {
+  currentVersion,
+  compareVersions,
+  checkLatest,
+  stageAndApply,
+  lastResult,
+  cleanupOldTarballs,
+  profileDir,
+};

@@ -309,7 +309,12 @@ function renderUpdate(info) {
   // The detached installer writes its outcome where the next start reads it, so a
   // finished (or failed) update is visible the first time the panel is opened.
   const last = info.last;
-  if (last && last.ok) updateHint.textContent = `已更新到 v${last.version}；重启 DSH 生效`;
+  if (last && last.ok) {
+    const cleaned = Array.isArray(last.removed) && last.removed.length
+      ? `；清掉了 ${last.removed.length} 个旧安装包`
+      : '';
+    updateHint.textContent = `已更新到 v${last.version}${cleaned}；重启 DSH 生效`;
+  }
   else if (last && last.ok === false) {
     const why = last.reason === 'helper-running'
       ? '还有悬浮球相关进程在跑，为避免只装一半，安装已中止（安装没有被改动）'

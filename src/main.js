@@ -1200,6 +1200,19 @@ function createWindow() {
   }, KEEP_ON_TOP_MS);
   keepOnTopTimer.unref?.();
 
+  // Old installers are a whole Electron runtime each (113 MB) sitting in the profile
+  // people back up, and cleaning up on every start also covers installs done by hand
+  // rather than through the panel. Delayed so it never competes with drawing the ball.
+  const cleanupTimer = setTimeout(() => {
+    try {
+      const result = update.cleanupOldTarballs();
+      if (result.removed.length) log('removed old installers:', result.removed.join(', '));
+    } catch (error) {
+      log('installer cleanup failed', error.message);
+    }
+  }, 12 * 1000);
+  cleanupTimer.unref?.();
+
   win.on('closed', () => { win = null; });
 
   // Keep the pet reachable when displays change.
