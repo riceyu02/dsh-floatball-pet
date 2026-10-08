@@ -34,9 +34,12 @@
   --value-ink: #f7f4ed;   /* 备用：想再分出主次时把余额指回这支奶白 */
   --value-ink-2: rgba(212, 227, 250, 0.9);
   --ok: #46d59a;
-  /* 底色取她头发的靛蓝：上浅下深，正好是那张设定图里发色的走向。 */
-  --surface-hi: rgba(66, 92, 165, 0.62);
-  --surface-lo: rgba(26, 37, 82, 0.70);
+  /* 底色取她头发的靛蓝：上浅下深，正好是那张设定图里发色的走向。
+     这两个 alpha 是"玻璃感"的来源，也是"不透明度拉到 100% 还是透"的原因：滑块只能
+     在这个底色之上再整体调暗，底色本身半透明的话，100% 也只是"半透明"。所以底色
+     本身调到接近实心，玻璃感留给 backdrop-filter 去补。 */
+  --surface-hi: rgba(66, 92, 165, 0.9);
+  --surface-lo: rgba(26, 37, 82, 0.95);
   --stroke: rgba(150, 186, 255, 0.22);
 
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -354,7 +357,7 @@ html.dragging-now * { cursor: grabbing !important; }
   width: var(--panel-w);
   padding: 13px 14px 12px;
   border-radius: 16px;
-  background: linear-gradient(180deg, rgba(48, 66, 128, 0.66), rgba(22, 31, 68, 0.74));
+  background: linear-gradient(180deg, rgba(48, 66, 128, 0.92), rgba(22, 31, 68, 0.96));
   backdrop-filter: blur(18px) saturate(1.25);
   -webkit-backdrop-filter: blur(18px) saturate(1.25);
   border: 1px solid var(--stroke);
