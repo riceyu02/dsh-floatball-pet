@@ -127,12 +127,35 @@ try {
         if ($asset.size -ne $assetBytes) {
           throw "Release already carries $assetName with a different size ($($asset.size) vs $assetBytes); delete that asset first."
         }
+        $existing = $asset.digest -replace '^sha256:', ''
+        if ($existing -and $existing -ne $sha256.ToLower()) {
+          throw "The asset on the release has digest $existing, but the local file is $sha256. Delete the asset and re-run."
+        }
       }
       else {
+        # curl.exe, never Invoke-RestMethod -InFile: PowerShell's file upload silently
+        # altered the body — a measured 113 MB package arrived 289 bytes shorter with a
+        # different digest, which is exactly why the SHA256 printed in some earlier
+        # release notes did not match the asset. curl sends the bytes unchanged, and the
+        # digest GitHub reports is compared with the local file before this script
+        # claims success.
         $uploadBase = $release.upload_url -replace '\{\?name,label\}$', ''
         $uploadUri = "$uploadBase`?name=$([Uri]::EscapeDataString($assetName))"
-        $asset = Invoke-RestMethod -Uri $uploadUri -Headers $headers -Method Post `
-          -ContentType 'application/gzip' -InFile $assetPath
+        $curl = Join-Path $env:SystemRoot 'System32\curl.exe'
+        if (-not (Test-Path -LiteralPath $curl)) { $curl = 'curl.exe' }
+        $responseFile = Join-Path $env:TEMP "dsh-pet-upload-$([guid]::NewGuid().ToString('N')).json"
+        & $curl -sS -X POST -H "Authorization: Bearer $token" -H 'Content-Type: application/gzip' `
+          -H 'User-Agent: dsh-desktop-pet-release-helper' -H 'Accept: application/vnd.github+json' `
+          --data-binary "@$assetPath" $uploadUri -o $responseFile
+        if ($LASTEXITCODE -ne 0) { throw "curl upload failed with exit code $LASTEXITCODE" }
+        $asset = Get-Content -LiteralPath $responseFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        Remove-Item -LiteralPath $responseFile -Force -ErrorAction SilentlyContinue
+        $remoteDigest = $asset.digest -replace '^sha256:', ''
+        if (-not $remoteDigest) { throw 'GitHub did not report the uploaded asset digest; verify the release by hand.' }
+        if ($remoteDigest -ne $sha256.ToLower()) {
+          throw "Uploaded asset digest is $remoteDigest but the local file is $sha256; the bytes changed in transit."
+        }
+        Write-Output "UPLOAD_VERIFIED=$remoteDigest"
       }
       Write-Output "RELEASE_ID=$($release.id)"
       Write-Output "DRAFT=$($release.draft)"

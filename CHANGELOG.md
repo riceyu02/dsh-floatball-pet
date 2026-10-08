@@ -2,6 +2,33 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 0.2.7
+
+置顶这次是真的修好了，并且**更正 0.2.4 的错误归因**。
+
+- **修复** 置顶：0.2.4 把看门狗换成 `setAlwaysOnTop(false)` + `setAlwaysOnTop(true)` 的"切换"，
+  以为单发 `true` 会因为 Chromium 缓存而不发原生调用。**这个判断是错的**：测试者用微秒级原生
+  采样证明两个调用都真的落到了 Win32 —— `false` 清掉位元、`true` 又把位元设上，但约 **0.7 毫秒
+  后**窗口样式被再次应用、位元又被抹掉。而同一版本还删掉了唯一会"抬升"窗口的 `moveTop()`，
+  净效果就从「每 3 秒冒一下」变成了**永久沉底**（实测 z 序第 27/32）。
+  现在：看门狗只调用 `setAlwaysOnTop(true, 'floating')`（**再也不调 `false`、也不调 `moveTop`**），
+  另外每 5 个周期通过随包的 `PetFocus.dll` 读一次真实的 `WS_EX_TOPMOST`，**只有真的缺了**才用
+  `SetWindowPos(HWND_TOPMOST, SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE)` 写回去——原生路径不受
+  Chromium 缓存影响。
+  实测（本机、同一套判据）：静置 10 秒位元稳定为 `0x08080028`、零次翻转；从外部用
+  `HWND_NOTOPMOST` 强行清掉后 **2.6 秒自行恢复**，再观察 10 秒保持稳定。
+- **修复** `tools/publish-release.ps1`：Release 正文里的 SHA256 与附件对不上，根因是
+  **PowerShell 的 `Invoke-RestMethod -InFile` 上传会改文件**——同一份本地包经它上传后，
+  GitHub 收到的是"少 289 字节、摘要不同"的另一份（改用 `curl.exe` 重传后摘要与本地逐字节一致）。
+  现在上传一律走 `curl.exe`，并把 GitHub 返回的 `digest` 与本地哈希**比对通过才算成功**；
+  已存在的附件也先校验摘要再复用。旧 Release 正文里的哈希不准，附件本身是完整的
+  （校验请以 GitHub 的 `digest` 为准）。
+- **修复** `tools/build-focus-dll.cjs`：`PetFocus.dll` 新增 `Topmost(IntPtr)` 导出
+  （读 `GWL_EXSTYLE`，缺位元才写 `HWND_TOPMOST`）。
+
+> 感谢测试者的第二份报告：微秒级位翻转序列、"外部 SetWindowPos 能长期存活"的对照、
+> 以及 Release 哈希核对，三条都直接指向了正确修法。
+
 ## 0.2.6
 
 新增：**在设置面板里检查更新，并一键升级到最新版。**

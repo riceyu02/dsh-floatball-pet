@@ -197,22 +197,21 @@ let win = null;
 let tray = null;
 
 /**
- * Put the pet back into the topmost band, without stealing focus.
+ * Ask Electron to keep the pet on top. The cheap half of the work — see the watchdog in
+ * createWindow for the half that actually holds, and for why nothing here may ever call
+ * `moveTop()` or `setAlwaysOnTop(false)`:
  *
- * Toggling is deliberate. `setAlwaysOnTop(true, 'floating')` alone is a no-op once
- * Chromium believes the window is already always-on-top — it returns without a native
- * call, so it cannot restore a `WS_EX_TOPMOST` bit that Win32 has cleared. The toggle
- * forces HWND_NOTOPMOST followed by HWND_TOPMOST, which leaves the bit set.
- *
- * `win.moveTop()` must never be used for this: stacking this layered, non-activatable
- * window at HWND_TOP is exactly what clears the bit (measured on 0.2.3 — the ball
- * surfaced above the browser for a moment and then sank behind the next activated
- * window). `win.isAlwaysOnTop()` is no help either: it reports the cached flag, not
- * the real window style.
+ *   * `moveTop()` stacks this layered, non-activatable window at HWND_TOP, which drops
+ *     it out of the topmost band (measured on 0.2.3: the ball surfaced for a moment and
+ *     then sank behind the next activated window).
+ *   * `setAlwaysOnTop(false)` clears WS_EX_TOPMOST for real, and on 0.2.4..0.2.6 the
+ *     following `true` could not hold it — the style was re-applied ~0.7 ms later with
+ *     the bit off, so the ball spent 0.026% of each cycle on top and the rest below
+ *     every other window.
+ *   * `win.isAlwaysOnTop()` reports Chromium's cached flag, never the real style.
  */
 function assertOnTop() {
   if (!win || win.isDestroyed()) return;
-  win.setAlwaysOnTop(false);
   win.setAlwaysOnTop(true, 'floating');
 }
 
@@ -1085,11 +1084,32 @@ function createWindow() {
   // Windows drops a topmost window out of the topmost band when something else takes
   // the foreground — another always-on-top window, a full-screen app, or a shell
   // utility that manages z-order. Nothing notifies us, so re-assert on a slow timer.
-  // See assertOnTop for why it toggles and why `moveTop` must never be used here.
+  //
+  // The JS call here is the cheap half: it costs nothing and is correct whenever
+  // Chromium's cached "always on top" is false. It is NOT enough on its own — a
+  // tester's microsecond trace on 0.2.4..0.2.6 showed that everything Electron does
+  // through setAlwaysOnTop gets undone: `false` clears WS_EX_TOPMOST for real, and
+  // `true` does set it but the style is re-applied ~0.7 ms later with the bit off.
+  // So every fifth tick also reads the real window style through the native helper and
+  // puts the bit back only when it is actually missing.
   assertOnTop();
+  let keepOnTopTicks = 0;
+  const enforceTopmost = async () => {
+    if (!win || win.isDestroyed()) return;
+    try {
+      const handle = win.getNativeWindowHandle();
+      const hwnd = handle.length >= 8 ? handle.readBigUInt64LE(0) : BigInt(handle.readUInt32LE(0));
+      const result = await dsh.ensureTopmost(hwnd.toString());
+      if (result === 'fixed') log('topmost was missing — restored through SetWindowPos');
+    } catch (error) {
+      log('topmost check failed', error.message);
+    }
+  };
   keepOnTopTimer = setInterval(() => {
     if (!win || win.isDestroyed() || !win.isVisible()) return;
     assertOnTop();
+    keepOnTopTicks += 1;
+    if (keepOnTopTicks % 5 === 0) enforceTopmost();
   }, KEEP_ON_TOP_MS);
   keepOnTopTimer.unref?.();
 

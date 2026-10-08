@@ -838,8 +838,49 @@ async function focusDshViaDll() {
   }
 }
 
-/** Does the helper answer on that port? Cheaper and more honest than trusting the file. */
-async function agentAlive(handshake) {
+/**
+ * Put the pet's own window back into the topmost band by reading the real window style
+ * rather than trusting Electron.
+ *
+ * Measured by a tester on 0.2.4/0.2.5/0.2.6: `setAlwaysOnTop(false)` really does clear
+ * `WS_EX_TOPMOST`, and the native call behind `setAlwaysOnTop(true, 'floating')` really
+ * does set it — but Chromium re-applies the window style about 0.7 ms later and the bit
+ * is gone again, so the JS side alone can never hold it. This goes straight through
+ * `SetWindowPos` in the shipped PetFocus.dll: read the bit, and only when it is missing
+ * force `HWND_TOPMOST` with `SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE` (measured to
+ * stick until the next write).
+ *
+ * @param {string} hwnd - window handle as a decimal string.
+ * @returns {Promise<'ok'|'fixed'|'no-dll'|'error'>}
+ */
+async function ensureTopmost(hwnd) {
+  const dll = focusDllPath();
+  if (!dll || !hwnd) return 'no-dll';
+  try {
+    const script = [
+      "$ErrorActionPreference='Stop'",
+      'try {',
+      `  $bytes = [IO.File]::ReadAllBytes(${psLiteral(dll)})`,
+      '  $asm = [Reflection.Assembly]::Load($bytes)',
+      `  if ([PetFocus]::Topmost([IntPtr][long]${hwnd})) { 'fixed' } else { 'ok' }`,
+      '} catch {',
+      "  'error: ' + $_.Exception.Message",
+      '}',
+    ].join('\n');
+
+    const out = (await runPowerShell(script, 15000)).trim();
+    if (out.startsWith('error')) {
+      if (process.env.PET_DEBUG) console.log('[pet:dsh] ensureTopmost ->', out.slice(0, 160));
+      return 'error';
+    }
+    return out === 'fixed' ? 'fixed' : 'ok';
+  } catch (error) {
+    if (process.env.PET_DEBUG) console.log('[pet:dsh] ensureTopmost threw ->', error.message);
+    return 'error';
+  }
+}
+
+/** Does the helper answer on that port? Cheaper and more honest than trusting the file. */async function agentAlive(handshake) {
   if (!handshake) return false;
   try {
     const response = await fetch(`http://127.0.0.1:${handshake.port}/health`, {
@@ -1438,6 +1479,7 @@ module.exports = {
   focusDsh,
   focusDshStrong,
   focusDshViaDll,
+  ensureTopmost,
   focusDshViaBroker,
   focusDshViaAgent,
   focusDshViaCom,
