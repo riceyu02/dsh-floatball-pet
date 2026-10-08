@@ -53,6 +53,7 @@ if (!process.argv.includes('--no-sandbox') && process.env.DSH_PET_NO_SANDBOX) {
 }
 
 const dsh = require('./dsh');
+const update = require('./update');
 const { Store } = require('./store');
 const { makeIconPng } = require('./icon');
 
@@ -790,6 +791,13 @@ function snapshot() {
       showUptime: store.data.showUptime,
       managedByDsh: PLUGIN_MANAGED,
     },
+    update: {
+      current: update.currentVersion(),
+      last: update.lastResult(),
+      // Installing for the user needs the profile and the CLI, which only exist when
+      // DSH owns this process; standalone runs can still check and download by hand.
+      auto: PLUGIN_MANAGED && Boolean(update.profileDir()),
+    },
     layout: computeLayout(),
     hover: { islandOpen, panelOpen },
     data: {
@@ -1348,6 +1356,33 @@ function registerIpc() {
   ipcMain.handle('pet:refresh', async () => {
     await Promise.all([refreshBalance(), refreshProcess()]);
     return snapshot();
+  });
+
+  /** Ask GitHub whether a newer release exists. Resolves with the answer or the reason. */
+  ipcMain.handle('pet:update-check', async () => {
+    try {
+      return { ok: true, ...(await update.checkLatest()) };
+    } catch (error) {
+      log('update check failed', error.message);
+      return { ok: false, current: update.currentVersion(), error: error.message };
+    }
+  });
+
+  /**
+   * Stage the new release and hand the install to a detached script, then quit: the
+   * helper's own executable sits inside the package pnpm has to replace, so nothing
+   * can be replaced while this process lives.
+   */
+  ipcMain.handle('pet:update-apply', async (_event, release) => {
+    try {
+      const staged = await update.stageAndApply(release, lastProbe.exePath);
+      log('update staged', staged.version, staged.tarball);
+      setTimeout(() => app.quit(), 1200);
+      return { ok: true, using: staged.version, via: 'restart' };
+    } catch (error) {
+      log('update apply failed', error.message);
+      return { ok: false, error: error.message };
+    }
   });
 
   ipcMain.handle('pet:open-dsh', async () => {

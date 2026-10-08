@@ -36,6 +36,10 @@ const lineBalance = document.getElementById('lineBalance');
 const lineUptime = document.getElementById('lineUptime');
 const islandInner = document.getElementById('islandInner');
 const avatar = document.getElementById('avatar');
+const versionOut = document.getElementById('versionOut');
+const checkUpdateBtn = document.getElementById('checkUpdate');
+const applyUpdateBtn = document.getElementById('applyUpdate');
+const updateHint = document.getElementById('updateHint');
 
 /** Throttled diagnostics, only when the window was opened with ?debug=1. */
 const DEBUG = new URLSearchParams(location.search).get('debug') === '1';
@@ -288,6 +292,66 @@ clearBallImageBtn.addEventListener('click', () => {
   api.clearBallImage();
 });
 
+/* ------------------------------------------------------------------- update */
+
+/** The release the panel is offering to install, filled in by a successful check. */
+let pendingRelease = null;
+/** False when this run cannot install by itself (standalone, no profile/CLI). */
+let updateAuto = true;
+
+function renderUpdate(info) {
+  if (!info) return;
+  if (info.current) versionOut.textContent = `v${info.current}`;
+  updateAuto = info.auto !== false;
+  if (!updateAuto) {
+    updateHint.textContent = '独立模式下只能检查版本；装插件请用 DSH 的插件页或命令行';
+  }
+  // The detached installer writes its outcome where the next start reads it, so a
+  // finished (or failed) update is visible the first time the panel is opened.
+  const last = info.last;
+  if (last && last.ok) updateHint.textContent = `已更新到 v${last.version}；重启 DSH 生效`;
+  else if (last && last.ok === false) updateHint.textContent = `上次更新 v${last.version} 没成功（退出码 ${last.code}），可以再试`;
+}
+
+checkUpdateBtn.addEventListener('click', async () => {
+  checkUpdateBtn.disabled = true;
+  applyUpdateBtn.hidden = true;
+  updateHint.textContent = '正在查询 GitHub…';
+  const result = await api.checkUpdate();
+  checkUpdateBtn.disabled = false;
+  if (!result || !result.ok) {
+    updateHint.textContent = `检查失败：${(result && result.error) || '未知错误'}`;
+    return;
+  }
+  if (result.current) versionOut.textContent = `v${result.current}`;
+  if (!result.newer) {
+    updateHint.textContent = `已是最新版本（v${result.current}）`;
+    return;
+  }
+  pendingRelease = result;
+  const size = result.assetSize ? `，安装包 ${(result.assetSize / 1048576).toFixed(1)} MB` : '';
+  const page = result.pageUrl ? `；下载页 ${result.pageUrl}` : '';
+  updateHint.textContent = updateAuto
+    ? `发现 v${result.latest}（当前 v${result.current}）${size}`
+    : `发现 v${result.latest}（当前 v${result.current}）${size}${page}`;
+  if (!updateAuto) return;
+  applyUpdateBtn.textContent = `更新到 v${result.latest}`;
+  applyUpdateBtn.hidden = false;
+});
+
+applyUpdateBtn.addEventListener('click', async () => {
+  if (!pendingRelease || !updateAuto) return;
+  applyUpdateBtn.disabled = true;
+  updateHint.textContent = `正在下载 v${pendingRelease.latest}…下载完悬浮球会退出`;
+  const result = await api.applyUpdate(pendingRelease);
+  if (!result || !result.ok) {
+    applyUpdateBtn.disabled = false;
+    updateHint.textContent = `更新失败：${(result && result.error) || '未知错误'}`;
+    return;
+  }
+  updateHint.textContent = `正在安装 v${result.using}；完成后重启 DSH 即可`;
+});
+
 /* --------------------------------------------------------------------- data */
 
 function formatUptime(seconds) {
@@ -481,6 +545,7 @@ function apply(snapshot) {
   quitBtn.title = config.managedByDsh ? '关闭到下次启动 DSH' : '';
   pinIslandInput.checked = !!config.islandPinned;
 
+  renderUpdate(snapshot.update);
 
   applyBallImage(config.ballImage);
 

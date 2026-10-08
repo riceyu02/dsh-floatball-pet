@@ -63,6 +63,18 @@
         <p class="hint">支持 GIF 动图与 PNG / JPG / WebP / BMP；图片会填满整个球，所以正方形效果最好</p>
       </div>
 
+      <div class="field">
+        <div class="field-row">
+          <label>版本</label>
+          <output id="versionOut">v—</output>
+        </div>
+        <div class="btn-row">
+          <button id="checkUpdate" class="ghost-btn" type="button">检查更新</button>
+          <button id="applyUpdate" class="ghost-btn" type="button" hidden>更新</button>
+        </div>
+        <p id="updateHint" class="hint">点「检查更新」向 GitHub 查询最新版本</p>
+      </div>
+
       <div class="panel-foot">
         <button id="openDsh" class="ghost-btn" type="button">打开 DSH</button>
         <button id="quit" class="danger-btn" type="button">退出</button>
