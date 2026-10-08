@@ -1,0 +1,511 @@
+/* ==========================================================================
+   DSH 悬浮球 —— 桌宠 + 灵动岛
+   窗口是整块透明画布：只有 .capsule 与 .panel 参与命中测试，其余区域点击穿透。
+   ========================================================================== */
+
+:root {
+  /* 三个可调比例，由 pet.js 按设置写进来。默认 1 = 跟随球径的原始比例。 */
+  --s: 56px;              /* 悬浮球直径；由主进程逐帧推进 */
+  /* 球在窗口里的位置（由主进程随布局下发）。横向钉的是球的**外侧边**、纵向钉的是**上沿**：
+     外侧边固定 ⟹ 球只往内侧长，于是它和面板的边缘在**任何球径下都齐平**，
+     面板本身也一个像素都不动。 */
+  --ball-edge: 368px;
+  --ball-y: 300px;
+  --room: 326px;          /* 球两侧各留出的空间（默认值，实际由主进程随布局下发） */
+  --island-w: 0px;        /* 灵动岛内容实测宽度，由 pet.js 量出后写回 */
+  --op: 1;                /* 不透明度 */
+  --pad: 42px;            /* 窗口内透明边距 */
+  --panel-gap: 12px;      /* 悬浮球与设置面板之间的间距 */
+  --panel-w: 324px;       /* 设置面板宽度 = 最大球径下整个灵动岛的长度，由 pet.js 量出写回 */
+
+  --fs: clamp(10px, calc(var(--s) * 0.208), 17px);
+  --tag-fs: clamp(8.5px, calc(var(--s) * 0.156), 12px);
+  --gear: clamp(20px, calc(var(--s) * 0.44), 36px);
+
+  --ink: #f4f1ea;
+  --ink-soft: rgba(240, 238, 232, 0.68);
+  --ink-faint: rgba(240, 238, 232, 0.44);
+  --accent: #7aa2ea;
+  --accent-soft: #b6cdf5;
+  /* 岛里那两行字用这三支：标签 = 她发梢的浅蓝，余额 = 蕾丝的奶白，
+     运行时间 = 偏冷的浅蓝白。分三级，一眼能分清哪行是哪个。 */
+  /* 标签原来 0.74 太淡，半透明的底上尤其糊；提亮到接近数值，并加一点字重。 */
+  --tag-ink: rgba(203, 221, 252, 0.94);
+  --value-ink: #f7f4ed;   /* 备用：想再分出主次时把余额指回这支奶白 */
+  --value-ink-2: rgba(212, 227, 250, 0.9);
+  --ok: #46d59a;
+  /* 底色取她头发的靛蓝：上浅下深，正好是那张设定图里发色的走向。 */
+  --surface-hi: rgba(66, 92, 165, 0.62);
+  --surface-lo: rgba(26, 37, 82, 0.70);
+  --stroke: rgba(150, 186, 255, 0.22);
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  /* 默认整块画布点击穿透；命中测试由主进程轮询光标完成 */
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+  font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI",
+               "PingFang SC", system-ui, -apple-system, sans-serif;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 注意：这里刻意不给 #stage 设 opacity / transform / will-change。
+   整窗合成层会让透明窗口在 Chromium 里多出一层矩形底，看起来就是
+   「悬浮球周围有一圈黑色方框」。不透明度改由 .capsule / .panel 各自承担。 */
+#stage { position: absolute; inset: 0; }
+
+/* --------------------------------------------------------------- 悬浮球 */
+
+.pet {
+  position: absolute;
+  /* Pinned by its OUTER edge — the left one when the island unfolds right, the
+     right one when it unfolds left. That is the edge the settings panel lines up
+     with, so pinning it keeps the two flush at every diameter: the ball simply
+     grows inwards. Vertically it is pinned by its top edge instead, so the panel
+     above stays put. */
+  left: var(--ball-edge);
+  top: var(--ball-y);
+  display: flex;
+  align-items: center;
+}
+/* Unfolding to the left: pin the capsule by its right edge, which is the ball's
+   right edge, so the ball's outer edge stays on --ball-edge measured from there. */
+.side-left .pet {
+  left: auto;
+  right: var(--ball-edge);
+}
+
+.capsule {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: var(--s);
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--surface-hi), var(--surface-lo));
+  border: 1px solid var(--stroke);
+  /* No drop shadow. On a transparent always-on-top window a soft shadow reads as
+     a halo floating over whatever is behind it, which is exactly what it looked
+     like. A hairline ring plus the inset highlight keeps the shape legible on
+     both dark and light wallpapers without casting anything onto the desktop. */
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  opacity: var(--op);
+  /* 半透明的底，配一层背景虚化：不然白字压在任何壁纸上都可能糊掉。 */
+  backdrop-filter: blur(14px) saturate(1.25);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+  transition: box-shadow 0.28s var(--ease), border-color 0.28s var(--ease);
+  cursor: pointer;
+}
+.side-left .capsule { flex-direction: row-reverse; }
+
+.capsule:hover,
+.capsule.open {
+  border-color: rgba(120, 150, 255, 0.32);
+  box-shadow:
+    0 0 0 1px rgba(111, 141, 255, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+.capsule.dragging { cursor: grabbing; }
+
+/* While a drag is in flight the pointer can briefly sit over the transparent
+   part of the window (the window is far bigger than the ball). Pinning the grab
+   cursor document-wide stops it flickering between grab and arrow.
+
+   Note the ball's place inside the window is expressed relative to a corner
+   (`bottom` / `right`), never in absolute terms — that is what lets the main
+   process shrink the window around the ball for the duration of a drag without
+   anything here having to change. */
+html.dragging-now,
+html.dragging-now * { cursor: grabbing !important; }
+
+/* --- 球体本体 ------------------------------------------------------------ */
+
+.orb {
+  position: relative;
+  flex: 0 0 var(--s);
+  width: var(--s);
+  height: var(--s);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 120% at 34% 26%, rgba(111, 141, 255, 0.34), transparent 64%),
+    #161d3a;
+}
+
+/* 悬浮球头像：从设定图正面视图裁出的脸，铺满整个圆。
+   「动态头像」= 她自己会动：像呼吸一样轻轻起伏两下，然后很轻地压一下脸
+   （相当于眨一次眼）。没有去画眼皮 —— 她的头发和眼珠是同一种蓝，从设定图上
+   定位眼睛并不可靠，画歪的眼皮比不眨更难看。 */
+.avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  transform-origin: 50% 62%;
+  -webkit-user-drag: none;
+  pointer-events: none;
+  animation: avatar-alive 5.6s ease-in-out infinite;
+}
+@keyframes avatar-alive {
+  0%   { transform: translateY(0) scale(1); }
+  12%  { transform: translateY(-2.6%) scale(1.016); }
+  24%  { transform: translateY(0) scale(0.994); }
+  36%  { transform: translateY(-2.6%) scale(1.016); }
+  48%  { transform: translateY(0) scale(1); }
+  60%  { transform: translateY(0.6%) scaleY(0.955) scaleX(1.014); }
+  67%  { transform: translateY(0) scale(1); }
+  100% { transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .avatar { animation: none; }
+}
+
+/* 用户自选的图标：铺满整个圆。用 cover 而不是 contain —— 头像那种 96% + 下移 1%
+   是给立绘量身定的，换成任意图片会露出底色、或者偏离圆心。GIF 在这里照常动，
+   <img> 本来就会播。 */
+.avatar.custom {
+  /* 用户自己挑的图不参与这套动画（GIF 自己会动）。 */
+  animation: none;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: none;
+  border-radius: 50%;
+}
+
+/* 点击唤起 DSH 时的一次性脉冲 */
+.pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+}
+.capsule.firing .pulse {
+  animation: fire 0.62s var(--ease);
+}
+@keyframes fire {
+  0%   { opacity: 1; box-shadow: 0 0 0 0 rgba(111, 141, 255, 0.55); }
+  100% { opacity: 0; box-shadow: 0 0 0 calc(var(--s) * 0.55) rgba(111, 141, 255, 0); }
+}
+
+/* --- 展开的灵动岛 -------------------------------------------------------- */
+
+.island {
+  /* 撑满整条胶囊的高度。.capsule 是 align-items:center，默认下 .island 只有文字那么高，
+     而它是 overflow:hidden 的裁剪框 —— 展开动画里的气泡就会被裁在文字那一条带子里。
+     改成 flex + 垂直居中，文字位置不变，裁剪框变成整条胶囊。 */
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  position: relative;
+  width: 0;
+  overflow: hidden;
+  /* Clip to the capsule's rounded end. The island box is square, so without this
+     the animation is drawn into the corners the capsule does not cover — which is
+     exactly "the effect spilling outside the island". The inner edge (against the
+     ball) stays square, because the ball covers it. */
+  border-radius: 0 calc(var(--s) / 2) calc(var(--s) / 2) 0;
+  /* 展开/收起用弹性曲线；拖动滑块改大小时由 .resizing 关掉，避免和主进程
+     逐帧推进的尺寸打架（否则会有一层额外的橡皮筋延迟）。 */
+  transition: width 0.34s var(--ease);
+}
+/* 展开时用实测宽度。就是这一条把岛撑开 —— 少了它，岛永远是 0 宽：
+   设置面板尺寸全对（量出来 212px）、class 也对，但屏幕上什么都看不到。 */
+.capsule.open .island { width: var(--island-w); }
+/* 收起比展开快：让开位置要显得干脆。展开慢一点则显得从容。 */
+.capsule:not(.open) .island { transition-duration: 0.19s; }
+.capsule:not(.open) .island-inner { transition-duration: 0.12s, 0.16s; }
+/* 灵动岛在左边时，圆头在另一侧。 */
+
+/* 齿轮永远待在岛的「外端」—— 离球最远的那一头：朝右展开时在最右，朝左展开时
+   在最左。朝左展开时视觉顺序整个反过来，所以文字右侧那段留白也要换到左侧，
+   否则空档会跑到文字和球之间，齿轮反而贴回球上。 */
+.side-left .island-inner { flex-direction: row-reverse; }
+.side-left .lines {
+  margin-right: 0;
+  margin-left: calc(var(--s) * 0.085);
+}
+
+/* 内容按需取宽：齿轮紧跟在文字后面，不再被 space-between 推到最远端。 */
+.island-inner {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: calc(var(--s) * 0.13);
+  /* 两端留白必须相等。之前是 0.22 / 0.17，于是灵动岛朝左展开时，球和文字的
+     距离跟朝右展开时不一样 —— 这就是左右看着不对称的原因。 */
+  padding: 0 calc(var(--s) * 0.105);
+  width: max-content;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(calc(var(--s) * -0.14));
+  transition: opacity 0.26s var(--ease) 0.04s, transform 0.36s var(--ease);
+}
+.capsule.open .island-inner { opacity: 1; transform: none; }
+
+/* 两行文字：余额在上、运行时间在下，每行都是「小灰标签 + 大亮数值」。
+   右边这段留白就是「灵动岛长度」：它把齿轮顶到岛的最边缘，同时把岛拉长。
+   放在这里而不是内边距里 —— 内边距在齿轮外面，那样齿轮永远到不了边。 */
+.lines {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: calc(var(--s) * 0.03);
+  margin-right: calc(var(--s) * 0.085);
+}
+/* 居中对齐，不是 baseline：baseline 会让小标签沉到数值的底线上，看着像掉了下去。 */
+.line {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--s) * 0.1);
+  line-height: 1.12;
+}
+.tag {
+  font-size: calc(var(--s) * 0.15);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--tag-ink);
+}
+/* 两行数值统一：同一个字号、同一个颜色（时间那支偏冷的浅蓝白）。 */
+.value {
+  font-size: calc(var(--s) * 0.235);
+  font-weight: 700;
+  color: var(--value-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+/* 余额变了闪一下。运行时间那行不动 —— 它每秒都在变，闪起来就是噪音。 */
+.value.flash { animation: value-flash 1.1s var(--ease); }
+@keyframes value-flash {
+  0% { color: var(--accent-soft); text-shadow: 0 0 10px rgba(111, 141, 255, 0.7); }
+  100% { color: var(--value-ink-2); text-shadow: none; }
+}
+
+/* 拖动大小滑块期间：只让主进程的逐帧推进决定尺寸，CSS 不再二次插值。 */
+#stage.resizing .island,
+#stage.resizing .island-inner {
+  transition: none;
+}
+
+/* --- 齿轮按钮 ------------------------------------------------------------ */
+/* 灵动岛内侧、紧贴文字的那颗齿轮。尺寸由 --gear 给（随球径缩放）。 */
+
+.gear {
+  flex: none;
+  width: var(--gear);
+  height: var(--gear);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: #dfe6ff;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 0.18s var(--ease), color 0.18s var(--ease), transform 0.18s var(--ease);
+}
+.gear svg {
+  display: block;
+  width: calc(var(--gear) * 0.62);
+  height: calc(var(--gear) * 0.62);
+}
+/* 齿轮本体填实，中心孔靠后画的这一圈用岛底色"挖"出来。 */
+.gear-teeth { fill: currentColor; }
+.gear-ring { fill: #232c52; }
+.gear:hover { background: rgba(255, 255, 255, 0.18); }
+.gear:active { transform: scale(0.9) rotate(35deg); }
+/* 设置面板开着的时候，齿轮保持点亮。 */
+.gear.on { background: rgba(111, 141, 255, 0.24); color: #cdd8ff; }
+.gear.on .gear-ring { fill: #2b3563; }
+
+/* ------------------------------------------------------------- 设置面板 */
+
+.panel {
+  position: absolute;
+  /* Flush with the ball's OUTER edge, which is pinned — so the two stay aligned at
+     every diameter while the panel itself never moves:
+       island right → panel's left edge  = ball's left edge
+       island left  → panel's right edge = ball's right edge
+     Only the island changes with the ball. */
+  left: var(--ball-edge);
+  bottom: calc(100% - var(--ball-y) + var(--panel-gap));
+  /* Matches the island at its widest, so the two line up instead of the panel
+     sticking out past it. pet.js measures the island at the frame ball size and
+     writes the value back here. */
+  width: var(--panel-w);
+  padding: 13px 14px 12px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(48, 66, 128, 0.66), rgba(22, 31, 68, 0.74));
+  backdrop-filter: blur(18px) saturate(1.25);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+  border: 1px solid var(--stroke);
+  /* Same reasoning as the capsule: the panel is opaque, so a hairline ring is
+     enough — a cast shadow just smudges the desktop behind the window. */
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  opacity: 0;
+  transform: translateY(10px) scale(0.965);
+  transform-origin: 30px calc(100% + 8px);
+  transition: opacity 0.20s var(--ease), transform 0.30s var(--ease);
+  pointer-events: none;
+  cursor: default;
+}
+.side-left .panel { left: auto; right: var(--ball-edge); transform-origin: calc(100% - 30px) calc(100% + 8px); }
+
+/* 悬浮球贴近屏幕顶部时，面板改从下方弹出 */
+.panel.below {
+  bottom: auto;
+  top: calc(var(--ball-y) + var(--s) + var(--panel-gap));
+  transform: translateY(-10px) scale(0.965);
+  transform-origin: 30px -8px;
+}
+.side-left .panel.below { transform-origin: calc(100% - 30px) -8px; }
+
+.panel.show { opacity: var(--op); transform: none; pointer-events: auto; }
+/* 收起同样比展开快，和灵动岛一起让开。 */
+.panel:not(.show) { transition-duration: 0.13s, 0.17s; }
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 11px;
+}
+.panel-title {
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+.icon-btn {
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  padding: 0; border: 0; border-radius: 6px;
+  background: transparent; color: var(--ink-faint);
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+.icon-btn svg { width: 11px; height: 11px; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; fill: none; }
+.icon-btn:hover { background: rgba(255, 255, 255, 0.10); color: var(--ink); }
+
+.field { margin-bottom: 11px; }
+.field-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+.field-row label { font-size: 11.5px; color: var(--ink-soft); }
+.field-row output {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-soft);
+  font-weight: 600;
+}
+.hint { margin: 4px 0 0; font-size: 10px; color: var(--ink-faint); }
+/* 开关下面的说明不属于 .field，所以没有 .field 的底边距 —— 补一个，
+   否则下一行会贴着它。 */
+.switch-row + .hint { margin-bottom: 10px; }
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.13);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 15px; height: 15px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #ffffff, #c9d4ea);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s var(--ease);
+}
+input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.12); }
+input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.22); }
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0 9px;
+  cursor: pointer;
+}
+.switch-row input { position: absolute; opacity: 0; pointer-events: none; }
+.switch {
+  position: relative;
+  flex: none;
+  width: 30px; height: 17px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  transition: background 0.22s var(--ease);
+}
+.switch i {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.24s var(--ease);
+}
+.switch-row input:checked + .switch { background: var(--accent); }
+.switch-row input:checked + .switch i { transform: translateX(13px); }
+.switch-label { font-size: 11.5px; color: var(--ink-soft); }
+
+.panel-foot { display: flex; gap: 8px; margin-top: 2px; }
+/* Same row of buttons as the footer, for the "悬浮球图标" field. */
+.btn-row { display: flex; gap: 8px; }
+.ghost-btn, .danger-btn {
+  flex: 1;
+  height: 28px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+.ghost-btn {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--stroke);
+  color: var(--ink);
+}
+.ghost-btn:hover { background: rgba(255, 255, 255, 0.13); }
+/* 「恢复默认」在没有自定义图标时是禁用的 —— 但还是占着位置，免得两个按钮左右横跳。 */
+.ghost-btn:disabled { opacity: 0.4; cursor: default; }
+.ghost-btn:disabled:hover { background: rgba(255, 255, 255, 0.07); }
+.danger-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 108, 108, 0.32);
+  color: #ff9a9a;
+}
+.danger-btn:hover { background: rgba(255, 90, 90, 0.16); color: #ffc0c0; }

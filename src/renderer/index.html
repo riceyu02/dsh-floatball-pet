@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <!-- img-src 里放开 file:，这样用户挑的图片（可能在任意路径）能被直接当成球体图标；
+       默认立绘走 'self'。渲染进程没有任何远程内容，也不做导航。 -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' file: data:;" />
+  <title>DSH 悬浮球</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="stage" class="side-right">
+    <!-- 设置面板：点击齿轮后从悬浮球上方升起 -->
+    <section id="panel" class="panel" aria-hidden="true">
+      <header class="panel-head">
+        <span class="panel-title">悬浮球设置</span>
+        <button id="close" class="icon-btn" type="button" title="关闭" aria-label="关闭">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>
+        </button>
+      </header>
+
+      <div class="field">
+        <div class="field-row">
+          <label for="size">悬浮球大小</label>
+          <output id="sizeOut" for="size">56 px</output>
+        </div>
+        <input id="size" type="range" min="40" max="96" step="2" value="56" />
+        <p class="hint">灵动岛会随悬浮球一起缩放</p>
+      </div>
+
+      <div class="field">
+        <div class="field-row">
+          <label for="opacity">不透明度</label>
+          <output id="opacityOut" for="opacity">100%</output>
+        </div>
+        <input id="opacity" type="range" min="35" max="100" step="5" value="100" />
+      </div>
+
+      <label id="autoStartRow" class="switch-row">
+        <input id="autoStart" type="checkbox" />
+        <span class="switch" aria-hidden="true"><i></i></span>
+        <span class="switch-label">开机自动启动</span>
+      </label>
+      <p id="dshManagedHint" class="hint" hidden>由 DSH 插件管理；退出 DSH 时悬浮球会自动关闭。</p>
+
+      <label class="switch-row">
+        <input id="pinIsland" type="checkbox" />
+        <span class="switch" aria-hidden="true"><i></i></span>
+        <span class="switch-label">灵动岛常驻展开</span>
+      </label>
+      <p class="hint">开启后悬浮球一直保持展开状态；拖动时仍会临时收起</p>
+
+      <div class="field">
+        <div class="field-row">
+          <label>悬浮球图标</label>
+          <output id="ballImageName">默认立绘</output>
+        </div>
+        <div class="btn-row">
+          <button id="pickBallImage" class="ghost-btn" type="button">选择图片…</button>
+          <button id="clearBallImage" class="ghost-btn" type="button">恢复默认</button>
+        </div>
+        <p class="hint">支持 GIF 动图与 PNG / JPG / WebP / BMP；图片会填满整个球，所以正方形效果最好</p>
+      </div>
+
+      <div class="panel-foot">
+        <button id="openDsh" class="ghost-btn" type="button">打开 DSH</button>
+        <button id="quit" class="danger-btn" type="button">退出</button>
+      </div>
+    </section>
+
+    <!-- 悬浮球 + 灵动岛 -->
+    <div id="pet" class="pet">
+      <div id="capsule" class="capsule" data-hit>
+        <div class="orb" id="orb">
+          <img class="avatar" id="avatar" src="assets/avatar.png" alt="" draggable="false" />
+          <span class="pulse" aria-hidden="true"></span>
+        </div>
+
+        <div class="island" id="island">
+
+          <div class="island-inner" id="islandInner">
+            <div class="lines">
+              <div class="line line-balance" id="lineBalance">
+                <span class="tag">余额</span>
+                <span class="value" id="balance">--</span>
+              </div>
+              <div class="line line-uptime" id="lineUptime">
+                <span class="tag">运行</span>
+                <span class="value" id="uptime">--</span>
+              </div>
+            </div>
+            <button id="gear" class="gear" type="button" title="设置" aria-label="设置">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path class="gear-ring" d="M12 15.6a3.6 3.6 0 1 0 0-7.2 3.6 3.6 0 0 0 0 7.2z" />
+                <path class="gear-teeth" d="M19.4 13a7.6 7.6 0 0 0 0-2l1.9-1.5-1.9-3.3-2.3.9a7.6 7.6 0 0 0-1.7-1L15.1 3h-3.8l-.3 2.4c-.6.2-1.2.6-1.7 1l-2.3-.9L5.1 8.8 7 10.3a7.6 7.6 0 0 0 0 2l-1.9 1.5 1.9 3.3 2.3-.9c.5.4 1.1.8 1.7 1l.3 2.4h3.8l.3-2.4c.6-.2 1.2-.6 1.7-1l2.3.9 1.9-3.3-1.9-1.5z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="pet.js"></script>
+</body>
+</html>

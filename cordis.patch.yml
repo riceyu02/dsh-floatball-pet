@@ -1,0 +1,10 @@
+# DSH desktop-pet bundle: the host row owns the separate transparent Electron
+# helper.  Keeping the helper out of DSH's main BrowserWindow isolates crashes,
+# focus rules and the Electron single-instance lock.
+
+- insert:
+    - id: dsh-desktop-pet-host
+      name: 'dsh-desktop-pet/host'
+      config:
+        autoStart: true
+

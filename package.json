@@ -1,0 +1,86 @@
+{
+  "name": "dsh-desktop-pet",
+  "productName": "DSH 悬浮球",
+  "version": "0.2.0",
+  "description": "DeepSeek Harness 桌面悬浮球桌宠及可安装 DSH 插件：悬浮球 + 灵动岛（余额 / 运行时间）+ 设置面板，点击悬浮球唤起 DSH。",
+  "author": "Riceyu02",
+  "license": "MIT",
+  "homepage": "https://github.com/Riceyu02/dsh-desktop-pet#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Riceyu02/dsh-desktop-pet.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Riceyu02/dsh-desktop-pet/issues"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis",
+    "plugin",
+    "desktop-pet",
+    "floating-ball"
+  ],
+  "private": true,
+  "type": "commonjs",
+  "main": "src/main.js",
+  "exports": {
+    ".": "./src/main.js",
+    "./host": "./plugin/host.mjs",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "pack": "node tools/assemble.cjs",
+    "build:dsh-plugin": "node tools/build-dsh-plugin.cjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "dsh": ">=0.1.7-rc.2 <0.3.0-0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.4"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    }
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.dsh.desktop-pet",
+    "productName": "DSH悬浮球",
+    "files": [
+      "src/**/*",
+      "tools/focus-agent.cjs",
+      "tools/launch.cjs",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "src/PetFocus.dll"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "portable"
+      ]
+    },
+    "portable": {
+      "artifactName": "DSH-floatball-portable.exe"
+    },
+    "asar": true
+  }
+}
