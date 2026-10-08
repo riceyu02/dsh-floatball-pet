@@ -26,6 +26,21 @@ test('derives DSH home and marks the helper as plugin-managed', () => {
   assert.equal(env.DSH_HOME, path.join('D:\\', '.dsh'))
 })
 
+test('strips the Electron-as-Node switch inherited from the DSH host', () => {
+  // Measured failure: with ELECTRON_RUN_AS_NODE=1 inherited, the helper runs as a plain
+  // Node process — no window, empty log, exit code 0 — which reads as "no ball".
+  const profile = path.join('D:\\', '.dsh', 'profiles', 'desktop')
+  const env = helperEnvironment({
+    profileDir: profile,
+    userDataDir: path.join(profile, 'data', 'dsh-desktop-pet'),
+    hostPid: 123,
+  }, { ELECTRON_RUN_AS_NODE: '1', ELECTRON_NO_ATTACH_CONSOLE: '1', PATH: 'inherited' })
+  assert.equal(env.ELECTRON_RUN_AS_NODE, undefined)
+  assert.equal(env.ELECTRON_NO_ATTACH_CONSOLE, undefined)
+  assert.equal(env.PATH, 'inherited')
+  assert.equal(env.DSH_PET_PLUGIN, '1')
+})
+
 test('resolves both packed and source-checkout runtimes', () => {
   const root = mkdtempSync(path.join(tmpdir(), 'dsh-pet-runtime-'))
   try {

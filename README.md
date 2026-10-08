@@ -66,17 +66,17 @@ DeepSeek Harness 窗口**。
 ### 方式一：装 Release 里的安装包（推荐，不需要编译）
 
 1. 到 [Releases](https://github.com/riceyu02/dsh-desktop-pet/releases) 下载
-   `dsh-desktop-pet-0.2.1.tgz`（约 113 MB，内含完整 Electron 运行时，装完无需联网再下载）。
+   `dsh-desktop-pet-0.2.2.tgz`（约 113 MB，内含完整 Electron 运行时，装完无需联网再下载）。
 2. 安装进桌面版实际使用的 `desktop` profile：
 
    ```powershell
-   dsh plugin --profile desktop add "$env:USERPROFILE\Downloads\dsh-desktop-pet-0.2.1.tgz"
+   dsh plugin --profile desktop add "$env:USERPROFILE\Downloads\dsh-desktop-pet-0.2.2.tgz"
    ```
 
    也可以直接给下载地址，让 DSH 自己去取：
 
    ```powershell
-   dsh plugin --profile desktop add https://github.com/riceyu02/dsh-desktop-pet/releases/download/v0.2.1/dsh-desktop-pet-0.2.1.tgz
+   dsh plugin --profile desktop add https://github.com/riceyu02/dsh-desktop-pet/releases/download/v0.2.2/dsh-desktop-pet-0.2.2.tgz
    ```
 
 3. **完全退出并重新打开 DSH**，悬浮球就会出现。
@@ -110,8 +110,8 @@ allowBuilds:
 git clone https://github.com/riceyu02/dsh-desktop-pet.git
 cd dsh-desktop-pet
 npm install                      # 若 Electron 下载慢，先设镜像，见「常见问题」
-npm run build:dsh-plugin         # 产出 artifacts\dsh-desktop-pet-0.2.1.tgz
-dsh plugin --profile desktop add "$PWD\artifacts\dsh-desktop-pet-0.2.1.tgz"
+npm run build:dsh-plugin         # 产出 artifacts\dsh-desktop-pet-0.2.2.tgz
+dsh plugin --profile desktop add "$PWD\artifacts\dsh-desktop-pet-0.2.2.tgz"
 ```
 
 ### 装上了吗

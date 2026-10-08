@@ -47,8 +47,19 @@ export function resolveRuntime(packageRoot = PACKAGE_ROOT, env = process.env) {
 }
 
 export function helperEnvironment({ profileDir, userDataDir, hostPid, noSandbox = false }, env = process.env) {
+  // The DSH host hands its own children `ELECTRON_RUN_AS_NODE=1` — that is how the CLI
+  // and its helper scripts reuse the Electron binary as Node. Inherited by the pet it
+  // does the same thing to it: the helper starts as a plain Node process, so no window
+  // is ever created, the log stays empty and the process exits with code 0. That looks
+  // exactly like "the ball never appears" (measured). The standalone launcher .cmd files
+  // clear this variable for the same reason; this is the plugin-side equivalent.
+  const {
+    ELECTRON_RUN_AS_NODE: _runAsNode,
+    ELECTRON_NO_ATTACH_CONSOLE: _noAttachConsole,
+    ...inherited
+  } = env
   return {
-    ...env,
+    ...inherited,
     DSH_HOME: resolveDshHome(profileDir, env),
     DSH_PROFILE_DIR: path.resolve(profileDir),
     DSH_PET_PLUGIN: '1',

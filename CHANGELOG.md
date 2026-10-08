@@ -2,11 +2,34 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 0.2.2
+
+从 git 装、从安装包装，都能真正跑起来了。0.2.1 的安装包有一个会让悬浮球"装了不出现"的缺陷。
+
+- **修复** `plugin/host.mjs`：helper 原本会继承 DSH 宿主发给子进程的 `ELECTRON_RUN_AS_NODE=1`，
+  于是 `DSH悬浮球.exe` 以**纯 Node 模式**启动——不创建窗口、日志一个字节不写、退出码 0。
+  这正是"重启 DSH 后球不出现"的根因：插件挂载正常、运行时也在，但 helper 从来不是以
+  Electron 应用的身份起来的（独立模式的 `.cmd` 启动器早就清掉了这个变量，插件侧漏了）。
+  现在把 `ELECTRON_RUN_AS_NODE` 与 `ELECTRON_NO_ATTACH_CONSOLE` 从 helper 环境里剥掉，
+  其余变量照旧继承，并补了单元测试。
+- **修复** `tools/prepare-install.cjs`：原先按"路径里有 `node_modules`"判断这是不是一次安装，
+  而 pnpm 拉 git 依赖时是在自己的构建目录里打包（路径里并没有 `node_modules`），于是**装出来的
+  包里没有运行时**。现在改为看这棵树有没有 `.git`：工作副本跳过，抓取来的副本才组装。
+- **修复** `tools/prepare-install.cjs`：只检查 `electron.exe` 存在是不够的——解压被中途打断
+  （安装失败时 pnpm 会杀整棵进程树）会留下"有 exe、缺 `ffmpeg.dll` 和 locale"的残缺 dist，
+  而 npm 不会为它认为已安装的包重跑 postinstall，这种运行时**根本起不来**。现在按
+  `ffmpeg.dll` / `icudtl.dat` / `resources.pak` / `v8_context_snapshot.bin` 判断完整性，
+  不完整就删掉重下，并在下载后复查。
+- **修复** `tools/build-focus-dll.cjs`：静音会漏进构建日志的 CLIXML 进度流。
+- **文档**：`github:` 简写会被解析成 SSH（没有 SSH key 的机器报 `Host key verification failed`），
+  改用 `git+https://…` 写法；`allowBuilds` 的键是「包名@pnpm 解析出的地址」而不是裸包名，
+  按 pnpm 打印的原文照抄；补上「`git` 必须在 PATH 上」这个前置条件。
+
 ## 0.2.1
 
 仓库整理与安装路径完善，应用本体与 0.2.0 相同。
 
-- **新增**三种安装方式并写进 README：Release 安装包、`github:` 直装（新增 `prepare` 钩子，
+- **新增**三种安装方式并写进 README：Release 安装包、git 直装（新增 `prepare` 钩子，
   在用户机器上现场组装 Electron 运行时）、源码自行构建。
 - **新增** GitHub Actions 工作流：推 `v*` 标签即自动构建插件包并挂到 Release。
 - **新增** `tools/publish-release.ps1`：在 git 到 github.com 不通的机器上，
@@ -19,18 +42,6 @@
 - **清理** 44 个 `tools/*.bak*` 历史备份、`tools/launch-out.txt`、`dist/`（约 481 MB 组装产物）、
   一个临时测试 userData 目录、4 个一次性诊断/严格模式启动脚本，以及旧版本安装包
   （Release 里已有同一份，SHA256 一致）。
-- **修复** `tools/prepare-install.cjs`：原先按"路径里有 `node_modules`"判断这是不是一次安装，
-  而 pnpm 拉 git 依赖时是在自己的构建目录里打包（路径里并没有 `node_modules`），于是**装出来的
-  包里没有运行时**。现在改为看这棵树有没有 `.git`：工作副本跳过，抓取来的副本才组装；
-  并且 npm 11 拦截 Electron 的 postinstall 时会自动补下二进制。已在两种情形下分别实测。
-- **修复** `tools/prepare-install.cjs`：只检查 `electron.exe` 存在是不够的——解压被中途打断
-  （安装失败时 pnpm 会杀整棵进程树）会留下一个"有 exe、缺 `ffmpeg.dll` 和 locale"的残缺
-  dist，而 npm 不会为它认为已安装的包重跑 postinstall。实测这种运行时**根本起不来**。
-  现在按 `ffmpeg.dll` / `icudtl.dat` / `resources.pak` / `v8_context_snapshot.bin` 判断完整性，
-  不完整就删掉重下，并在下载后复查。
-- **文档**：`github:` 简写会被解析成 SSH（无 key 的机器报 `Host key verification failed`），
-  改为给出 `git+https://…` 写法；`allowBuilds` 的键是「包名@解析出的地址」而非裸包名，
-  按 pnpm 打印的原文照抄。
 
 ## 0.2.0
 
