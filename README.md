@@ -84,17 +84,25 @@ DeepSeek Harness 窗口**。
 ### 方式二：直接用 GitHub 仓库安装（不需要 Release）
 
 ```powershell
-dsh plugin --profile desktop add github:riceyu02/dsh-desktop-pet
+dsh plugin --profile desktop add git+https://github.com/riceyu02/dsh-desktop-pet.git
 ```
 
+前置条件：**`git` 必须在 PATH 上**（pnpm 靠它取仓库）。用 `git+https://…` 而不是 `github:` 简写
+——后者会被解析成 `git+ssh://git@github.com/…`，没有配 SSH key 的机器会直接
+`Host key verification failed`。
+
 这条路径不下载预编译包，而是在你机器上现装依赖、现组装 Electron 运行时（约 500 MB，几分钟）。
-pnpm 默认会拦截依赖的构建脚本，第一次通常会失败并打印需要放行的名字；把它加进
-`<profile>\pnpm-workspace.yaml` 的 `allowBuilds` 再跑一次即可：
+第一次跑通常会在**构建脚本**这一步停下：pnpm 11 默认拦截依赖的构建脚本，并把它要求的那一行
+原样打印出来，例如
 
 ```yaml
 allowBuilds:
-  dsh-desktop-pet: true
+  "dsh-desktop-pet@https://codeload.github.com/riceyu02/dsh-desktop-pet/tar.gz/2f1a…": true
 ```
+
+把这行照抄进 `<profile>\pnpm-workspace.yaml` 再跑一次。**注意键是「包名@pnpm 解析出的地址」，
+不是裸包名**（地址里带着它给这次抓取算的 commit）。DSH 插件页上也有对应的
+「允许这些脚本并重试」按钮。Electron 下载慢时先设 `$env:ELECTRON_MIRROR`，见「常见问题」。
 
 ### 方式三：自己构建
 

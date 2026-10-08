@@ -106,7 +106,7 @@ function build() {
     '"@ -OutputAssembly "' + DLL + '" -ErrorAction Stop',
     "'built'",
   ].join('\n');
-  const encoded = Buffer.from(`[Console]::OutputEncoding=[System.Text.Encoding]::UTF8\n${script}`, 'utf16le').toString('base64');
+  const encoded = Buffer.from(`[Console]::OutputEncoding=[System.Text.Encoding]::UTF8\n$ProgressPreference='SilentlyContinue'\n${script}`, 'utf16le').toString('base64');
   const out = execFileSync('powershell.exe',
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded],
     { encoding: 'utf8', timeout: 120000 }).trim();

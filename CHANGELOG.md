@@ -19,6 +19,13 @@
 - **清理** 44 个 `tools/*.bak*` 历史备份、`tools/launch-out.txt`、`dist/`（约 481 MB 组装产物）、
   一个临时测试 userData 目录、4 个一次性诊断/严格模式启动脚本，以及旧版本安装包
   （Release 里已有同一份，SHA256 一致）。
+- **修复** `tools/prepare-install.cjs`：原先按"路径里有 `node_modules`"判断这是不是一次安装，
+  而 pnpm 拉 git 依赖时是在自己的构建目录里打包（路径里并没有 `node_modules`），于是**装出来的
+  包里没有运行时**。现在改为看这棵树有没有 `.git`：工作副本跳过，抓取来的副本才组装；
+  并且 npm 11 拦截 Electron 的 postinstall 时会自动补下二进制。已在两种情形下分别实测。
+- **文档**：`github:` 简写会被解析成 SSH（无 key 的机器报 `Host key verification failed`），
+  改为给出 `git+https://…` 写法；`allowBuilds` 的键是「包名@解析出的地址」而非裸包名，
+  按 pnpm 打印的原文照抄。
 
 ## 0.2.0
 
