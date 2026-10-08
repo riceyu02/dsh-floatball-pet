@@ -63,6 +63,16 @@ DeepSeek Harness 窗口**。
 <DSH 安装目录>\resources\runtime\cli\bin\dsh.cmd
 ```
 
+**想给别人装？**三条路的代价差得很多，按省事程度排：
+
+| 方式 | 对方需要 | 代价 |
+|---|---|---|
+| 直接把 `dsh-desktop-pet-0.2.2.tgz` 发给他，用**本地路径**装 | 只要能收到文件 | 113 MB，装完即用，不联网、不构建、不放行 |
+| **方式一**（Release 地址） | 能连 `github.com` | 113 MB 下载 |
+| **方式二**（仓库地址） | 能连 `github.com`、`git` 在 PATH、放行构建脚本、能下 Electron | ~600 MB、几分钟，且换 commit 要再放行一次 |
+
+所以「发给别人」这件事本身，本地路径那条最稳；仓库那条更适合想跟源码、或拿不到 Release 资产的人。
+
 ### 方式一：装 Release 里的安装包（推荐，不需要编译）
 
 1. 到 [Releases](https://github.com/riceyu02/dsh-desktop-pet/releases) 下载
@@ -84,12 +94,15 @@ DeepSeek Harness 窗口**。
 ### 方式二：直接用 GitHub 仓库安装（不需要 Release）
 
 ```powershell
-dsh plugin --profile desktop add git+https://github.com/riceyu02/dsh-desktop-pet.git
+dsh plugin --profile desktop add git+https://github.com/riceyu02/dsh-desktop-pet.git#v0.2.2
 ```
 
 前置条件：**`git` 必须在 PATH 上**（pnpm 靠它取仓库）。用 `git+https://…` 而不是 `github:` 简写
 ——后者会被解析成 `git+ssh://git@github.com/…`，没有配 SSH key 的机器会直接
 `Host key verification failed`。
+
+**建议钉一个 tag（如上面的 `#v0.2.2`），不要跟着 `main` 走。** 原因见下：放行的键里带着 commit，
+跟 `main` 意味着插件每更新一次，装的人就要重新放行一次；钉 tag 则一个版本只需放行一次。
 
 这条路径不下载预编译包，而是在你机器上现装依赖、现组装 Electron 运行时（约 500 MB，几分钟）。
 第一次跑通常会在**构建脚本**这一步停下：pnpm 11 默认拦截依赖的构建脚本，并把它要求的那一行
@@ -101,7 +114,8 @@ allowBuilds:
 ```
 
 把这行照抄进 `<profile>\pnpm-workspace.yaml` 再跑一次。**注意键是「包名@pnpm 解析出的地址」，
-不是裸包名**（地址里带着它给这次抓取算的 commit）。DSH 插件页上也有对应的
+不是裸包名**——pnpm 对 git 依赖只认这个精确匹配（裸包名与通配符都不生效），而地址里带着它给
+这次抓取算的 commit，所以换一个 commit 就得换一行。DSH 插件页上也有对应的
 「允许这些脚本并重试」按钮。Electron 下载慢时先设 `$env:ELECTRON_MIRROR`，见「常见问题」。
 
 ### 方式三：自己构建
