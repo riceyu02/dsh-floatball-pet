@@ -249,3 +249,10 @@ dsh-desktop-pet/
 项目原创代码使用 [MIT License](LICENSE)。Electron、Chromium 与美术素材的说明见
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。美术素材允许随本应用及其插件包公开分发，
 但不包含在 MIT 授权范围内，也不授权脱离本应用单独复用。
+
+## 更新插件时的一个坑
+
+悬浮球运行时会锁住 `node_modules\dsh-desktop-pet\runtime\` 里的文件，pnpm 因此在替换时报
+`ERR_PNPM_EPERM ... runtime`（已实测，状态会干净回滚、旧版本照常可用）。**升级前先退出悬浮球**
+（托盘 → 退出，或先 `dsh plugin --profile desktop remove dsh-desktop-pet`），装完再重启 DSH。
+另外：同一个包换版本后，DSH 会报 `restart-required`——新代码要重启才能加载。
