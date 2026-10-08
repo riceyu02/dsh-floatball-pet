@@ -94,11 +94,25 @@ html, body {
 
 .capsule {
   pointer-events: auto;
+  position: relative;
   display: flex;
   flex-direction: row;
   align-items: center;
   height: var(--s);
   border-radius: 999px;
+  transition: box-shadow 0.28s var(--ease), border-color 0.28s var(--ease);
+  cursor: pointer;
+}
+/* The pill's own surface lives on a pseudo-element, and that is where the opacity
+   setting is applied. The ball is a child of the capsule, so putting `opacity` on the
+   capsule itself faded the ball along with the island — the opacity slider must not
+   touch the ball at all. */
+.capsule::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: 0;
   background: linear-gradient(180deg, var(--surface-hi), var(--surface-lo));
   border: 1px solid var(--stroke);
   /* No drop shadow. On a transparent always-on-top window a soft shadow reads as
@@ -112,13 +126,13 @@ html, body {
   /* 半透明的底，配一层背景虚化：不然白字压在任何壁纸上都可能糊掉。 */
   backdrop-filter: blur(14px) saturate(1.25);
   -webkit-backdrop-filter: blur(14px) saturate(1.25);
-  transition: box-shadow 0.28s var(--ease), border-color 0.28s var(--ease);
-  cursor: pointer;
+  transition: box-shadow 0.28s var(--ease), border-color 0.28s var(--ease), opacity 0.2s var(--ease);
 }
+.capsule > * { position: relative; z-index: 1; }
 .side-left .capsule { flex-direction: row-reverse; }
 
-.capsule:hover,
-.capsule.open {
+.capsule:hover::before,
+.capsule.open::before {
   border-color: rgba(120, 150, 255, 0.32);
   box-shadow:
     0 0 0 1px rgba(111, 141, 255, 0.22),
@@ -259,11 +273,14 @@ html.dragging-now * { cursor: grabbing !important; }
   padding: 0 calc(var(--s) * 0.105);
   width: max-content;
   white-space: nowrap;
-  opacity: 0;
+  /* Folded to nothing, and scaled by the opacity setting when it is out: the island's
+     text has to fade with its pill, while the ball behind it stays fully opaque. */
+  --inner: 0;
+  opacity: calc(var(--op) * var(--inner));
   transform: translateX(calc(var(--s) * -0.14));
   transition: opacity 0.26s var(--ease) 0.04s, transform 0.36s var(--ease);
 }
-.capsule.open .island-inner { opacity: 1; transform: none; }
+.capsule.open .island-inner { --inner: 1; transform: none; }
 
 /* 两行文字：余额在上、运行时间在下，每行都是「小灰标签 + 大亮数值」。
    右边这段留白就是「灵动岛长度」：它把齿轮顶到岛的最边缘，同时把岛拉长。
