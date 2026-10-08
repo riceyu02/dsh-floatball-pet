@@ -13,9 +13,9 @@ window.__ModuleLoader__.load({
      * never touches the pet process, the profile, or the file system.
      */
     const copy = {
-      nav: '悬浮球',
+      nav: '灵动岛悬浮球',
       intro: '桌宠悬浮球与灵动岛。这里只控制它开不开、以及版本更新；大小、图标、灵动岛这些外观设置在悬浮球自己的齿轮面板里。',
-      enable: '启用悬浮球',
+      enable: '启用灵动岛悬浮球',
       enableHint: '关掉只是停止悬浮球进程，灵动岛的外观与偏好设置都原样保留。',
       version: '版本',
       check: '检查更新',
@@ -44,7 +44,16 @@ window.__ModuleLoader__.load({
       } catch {
         parsed = null
       }
-      if (!response.ok) throw new Error((parsed && parsed.error) || `HTTP ${response.status}`)
+      if (!response.ok) {
+        // A 404 with HTML is not our route answering: the request fell through to the
+        // app shell, which means the host half has not registered its routes (it needs
+        // the webServer service, injected) — usually because that half was updated and
+        // DSH has not been restarted yet.
+        if (response.status === 404 && !parsed) {
+          throw new Error('插件宿主还没注册接口（多半是刚更新完还没重启 DSH）。完全退出并重新打开 DSH 后再试。')
+        }
+        throw new Error((parsed && parsed.error) || `HTTP ${response.status}`)
+      }
       return parsed || {}
     }
 
@@ -152,7 +161,13 @@ window.__ModuleLoader__.load({
         React.createElement('h2', { className: 'dsh-pet-set-title' }, copy.nav),
         React.createElement('p', { className: 'dsh-pet-set-intro' }, copy.intro),
 
-        error ? React.createElement('p', { className: 'dsh-pet-set-error' }, error) : null,
+        error ? React.createElement('div', { className: 'dsh-pet-set-error-row' },
+          React.createElement('p', { className: 'dsh-pet-set-error' }, error),
+          React.createElement('button', {
+            type: 'button',
+            className: 'dsh-pet-set-btn',
+            onClick: () => { void load() },
+          }, '重试')) : null,
         !available && !error ? React.createElement('p', { className: 'dsh-pet-set-error' }, copy.unavailable) : null,
         status && !status.runtimeReady ? React.createElement('p', { className: 'dsh-pet-set-error' }, copy.missingRuntime) : null,
 
@@ -222,6 +237,7 @@ window.__ModuleLoader__.load({
 .dsh-pet-set-switch.is-on::after { transform: translateX(16px); }
 .dsh-pet-set-switch:disabled { opacity: 0.5; cursor: default; }
 .dsh-pet-set-error { margin: 4px 0; font-size: 12px; color: #e5484d; line-height: 1.5; }
+.dsh-pet-set-error-row { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
 .dsh-pet-set-note { margin: 8px 0 0; font-size: 12px; opacity: 0.75; line-height: 1.5; }
 .dsh-pet-set-empty { font-size: 12px; opacity: 0.6; }
 `

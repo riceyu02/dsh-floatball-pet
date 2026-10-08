@@ -4,7 +4,12 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const name = 'dsh-desktop-pet-host'
-export const inject = []
+// Hard dependency, not `ctx.get('webServer')` at apply time: the service is not
+// necessarily up when the plugin activates, and a lookup returning undefined leaves the
+// settings page talking to a route nobody registered — every request then falls through
+// to the SPA and comes back 404 (measured). Injecting it makes cordis start this plugin
+// only once the HTTP carrier exists, which is how the other desktop plugins do it.
+export const inject = ['webServer']
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const EXECUTABLE_NAME = 'DSH悬浮球.exe'
@@ -377,9 +382,9 @@ async function readJsonBody(req) {
  * state and ask for an update without knowing about cordis services.
  */
 function registerRoutes(ctx, state) {
-  const webServer = typeof ctx?.get === 'function' ? ctx.get('webServer') : null
+  const webServer = ctx?.webServer
   if (!webServer || typeof webServer.register !== 'function') {
-    report(ctx, 'warn', 'webServer 服务不可用：DSH 设置页里的悬浮球面板不会出现。')
+    report(ctx, 'warn', 'webServer 服务不可用：DSH 设置页里的灵动岛悬浮球面板不会出现。')
     return null
   }
   return webServer.register({
