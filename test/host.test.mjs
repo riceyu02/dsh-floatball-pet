@@ -97,3 +97,19 @@ test('supervisor starts, retries an early sandbox failure, and stops the helper'
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('game process lists survive the trip to the helper environment', () => {
+  const env = helperEnvironment({
+    profileDir: 'C:\\profile',
+    userDataDir: 'C:\\profile\\data',
+    hostPid: 1,
+    gameProcesses: ['EldenRing.exe', ' Game '],
+    ignoreProcesses: ['mpv'],
+  }, { PATH: 'x' })
+  // Names are normalised once, where the config is read, so the pet can compare them
+  // straight against the executable name it reads out of the window.
+  assert.equal(env.DSH_PET_GAME_PROCESSES, 'eldenring,game')
+  assert.equal(env.DSH_PET_IGNORE_PROCESSES, 'mpv')
+  // And the two variables that used to make the ball never appear stay stripped.
+  assert.equal(env.ELECTRON_RUN_AS_NODE, undefined)
+})

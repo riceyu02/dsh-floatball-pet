@@ -56,7 +56,7 @@ export function resolveRuntime(packageRoot = PACKAGE_ROOT, env = process.env) {
   return candidates.find(candidate => existsSync(candidate)) ?? null
 }
 
-export function helperEnvironment({ profileDir, userDataDir, hostPid, noSandbox = false }, env = process.env) {
+export function helperEnvironment({ profileDir, userDataDir, hostPid, noSandbox = false, gameProcesses = [], ignoreProcesses = [] }, env = process.env) {
   // The DSH host hands its own children `ELECTRON_RUN_AS_NODE=1` — that is how the CLI
   // and its helper scripts reuse the Electron binary as Node. Inherited by the pet it
   // does the same thing to it: the helper starts as a plain Node process, so no window
@@ -75,8 +75,20 @@ export function helperEnvironment({ profileDir, userDataDir, hostPid, noSandbox 
     DSH_PET_PLUGIN: '1',
     DSH_PET_PLUGIN_HOST_PID: String(hostPid),
     DSH_PET_USER_DATA: path.resolve(userDataDir),
+    // Which full-screen windows count as games. Nothing in Windows answers that for
+    // borderless full screen, so the pet takes a list: names to always treat as a game,
+    // and names to never treat as one. Normalised here so the pet can compare the names
+    // straight against the executable name it reads out of the window.
+    ...(nameList(gameProcesses).length ? { DSH_PET_GAME_PROCESSES: nameList(gameProcesses).join(',') } : {}),
+    ...(nameList(ignoreProcesses).length ? { DSH_PET_IGNORE_PROCESSES: nameList(ignoreProcesses).join(',') } : {}),
     ...(noSandbox ? { DSH_PET_NO_SANDBOX: '1' } : {}),
   }
+}
+
+/** Accepts `['a','b']` or `'a, b'` and normalises to lower-case executable names. */
+export function nameList(value) {
+  const parts = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : []
+  return parts.map(entry => String(entry).trim().toLowerCase().replace(/\.exe$/, '')).filter(Boolean)
 }
 
 /**
@@ -89,6 +101,8 @@ export class PetSupervisor {
     this.runtimePath = options.runtimePath
     this.profileDir = options.profileDir
     this.userDataDir = options.userDataDir
+    this.gameProcesses = options.gameProcesses ?? []
+    this.ignoreProcesses = options.ignoreProcesses ?? []
     this.hostPid = options.hostPid ?? process.pid
     this.platform = options.platform ?? process.platform
     this.spawn = options.spawn ?? nodeSpawn
@@ -132,6 +146,8 @@ export class PetSupervisor {
         userDataDir: this.userDataDir,
         hostPid: this.hostPid,
         noSandbox,
+        gameProcesses: this.gameProcesses,
+        ignoreProcesses: this.ignoreProcesses,
       }),
     })
     this.child = child
@@ -501,6 +517,11 @@ export function apply(ctx, config = {}) {
     runtimePath,
     profileDir,
     userDataDir,
+    // Which full-screen windows the pet treats as a game. `gameProcesses` forces a
+    // program to count (add your game if it is missed); `ignoreProcesses` keeps one out
+    // (add your video player if a borderless full-screen video hides the ball).
+    gameProcesses: nameList(config.gameProcesses),
+    ignoreProcesses: nameList(config.ignoreProcesses),
     log: (level, message) => report(ctx, level, message),
   })
 

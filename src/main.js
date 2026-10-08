@@ -233,9 +233,73 @@ const TOPMOST_GUARD_MS = 250;
 // While the ball is in hand every frame moves and restyles the window.
 const TOPMOST_GUARD_DRAG_MS = 60;
 let topmostGuardTimer = null;
-/** True while the pet is deliberately hidden because a game is in the way. */
-/** True while a full-screen window is in front — the pet then deliberately stays behind it. */
+/** True while the pet is deliberately hidden because a game owns the screen. */
 let topmostSuppressed = false;
+
+/**
+ * Which full-screen windows are games, and which are just full-screen.
+ *
+ * Windows answers this for exclusive full screen only ("a full-screen Direct3D application
+ * is running", the state it uses to suppress notifications). For borderless full screen —
+ * how most games go full screen today — nothing in the system answers it, so the judgement
+ * is: a borderless window covering the whole display is a game *unless* the program behind
+ * it is one of the things people commonly run full screen without playing anything
+ * (browsers, video players, slideshows, editors, terminals). A maximised window never
+ * qualifies, so ordinary desktop use is untouched.
+ *
+ * Both lists are configurable: `gameProcesses` / `ignoreProcesses` in the plugin's config
+ * arrive here as environment variables.
+ */
+const NOT_A_GAME = new Set([
+  // browsers, which is what F11 looks like
+  'chrome', 'msedge', 'firefox', 'brave', 'opera', 'vivaldi', 'iexplore', '360se',
+  '360chrome', 'qqbrowser', 'sogouexplorer',
+  // windows itself
+  'explorer', 'applicationframehost', 'searchhost', 'startmenuexperiencehost',
+  'shellexperiencehost', 'textinputhost', 'systemsettings', 'windowsterminal',
+  'conhost', 'cmd', 'powershell', 'pwsh', 'mintty',
+  // video
+  'vlc', 'mpv', 'potplayer', 'potplayermini64', 'potplayer64', 'mpc-hc', 'mpc-hc64',
+  'wmplayer', 'foobar2000', 'bilibili', 'iqiyi', 'qqlive', 'youku', 'photos',
+  'microsoft.photos', 'videoplayer',
+  // documents and slideshows
+  'powerpnt', 'winword', 'excel', 'wpp', 'et', 'wps', 'acrord32', 'acrobat',
+  'sumatrapdf', 'foxitpdfreader', 'foxitreader',
+  // editors and IDEs
+  'code', 'devenv', 'idea64', 'pycharm64', 'webstorm64', 'sublime_text', 'notepad',
+  'notepad++', 'gvim', 'vim',
+  // calls and chat
+  'zoom', 'teams', 'ms-teams', 'discord', 'slack', 'wechat', 'weixin', 'qq', 'dingtalk',
+  'feishu', 'lark',
+  // capture, and anything of ours
+  'obs64', 'obs32', 'camtasia', 'snippingtool', 'screenclippinghost',
+  'electron', 'dsh',
+]);
+
+function envNames(name) {
+  return String(process.env[name] || '')
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase().replace(/\.exe$/, ''))
+    .filter(Boolean);
+}
+
+const FORCED_GAMES = new Set(envNames('DSH_PET_GAME_PROCESSES'));
+for (const extra of envNames('DSH_PET_IGNORE_PROCESSES')) NOT_A_GAME.add(extra);
+
+/** @returns {{game: boolean, why: string}|null} */
+function judgeFullscreenWindow(full) {
+  if (!full) return null;
+  const name = full.processName || '';
+  if (name && FORCED_GAMES.has(name)) return { game: true, why: `${name} is on the game list` };
+  if (win32.d3dFullscreenRunning()) {
+    return { game: true, why: 'Windows reports a full-screen Direct3D application' };
+  }
+  if (!full.borderless) {
+    return { game: false, why: `full-screen window with a frame (${name || full.className})` };
+  }
+  if (name && NOT_A_GAME.has(name)) return { game: false, why: `${name} is not a game` };
+  return { game: true, why: `borderless full-screen ${name || full.className}` };
+}
 let lastSizeTick = 0;
 let dragDirty = false;
 /**
@@ -1169,13 +1233,14 @@ function createWindow() {
         y: Math.round(store.data.centerY || 0),
       }).bounds;
       const full = win32.fullscreenWindow(bounds, handle);
-      if (full && !topmostSuppressed) {
+      const verdict = judgeFullscreenWindow(full);
+      if (verdict && verdict.game && !topmostSuppressed) {
         topmostSuppressed = true;
-        log(`full-screen window present — hiding the pet (class=${full.className} title="${full.title.slice(0, 60)}")`);
+        log(`hiding the pet: ${verdict.why} (class=${full.className} title="${full.title.slice(0, 60)}")`);
         win.hide();
-      } else if (!full && topmostSuppressed) {
+      } else if ((!verdict || !verdict.game) && topmostSuppressed) {
         topmostSuppressed = false;
-        log('full-screen window gone — showing the pet again');
+        log(`showing the pet again: ${verdict ? verdict.why : 'no full-screen window'}`);
         win.showInactive();
       }
       if (topmostSuppressed) {

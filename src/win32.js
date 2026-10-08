@@ -70,6 +70,7 @@ function load() {
       const koffi = require(candidate);
       const user32 = koffi.load('user32.dll');
       const shell32 = koffi.load('shell32.dll');
+      const kernel32 = koffi.load('kernel32.dll');
       const enumProc = koffi.proto('bool EnumWindowsProc(void *hwnd, void *param)');
       api = {
         source: candidate,
@@ -94,6 +95,9 @@ function load() {
         // full-screen Direct3D application is running, which is as close to "a game is
         // on" as the system will tell anybody.
         queryUserNotificationState: shell32.func('int SHQueryUserNotificationState(_Out_ int *state)'),
+        openProcess: kernel32.func('void *OpenProcess(unsigned int access, bool inherit, unsigned int pid)'),
+        queryFullProcessImageName: kernel32.func('bool QueryFullProcessImageNameW(void *handle, unsigned int flags, _Out_ char *buffer, _Inout_ unsigned int *size)'),
+        closeHandle: kernel32.func('bool CloseHandle(void *handle)'),
       };
       return api;
     } catch {
@@ -130,15 +134,17 @@ function isTopmost(hwnd) {
  * The first visible window, in z-order, that covers a whole display — a full-screen or
  * borderless-full-screen window, i.e. one that owns the screen rather than sharing it.
  *
- * Geometry is the whole test on purpose. A maximised window stops at the work area, so it
- * does not qualify; a full-screen or borderless one includes the taskbar's strip. Window
- * styles were the obvious alternative and are useless here: borderless full-screen games
- * keep a plain WS_POPUP or even the caption style, and Windows' own "a full-screen D3D
- * application is running" state (SHQueryUserNotificationState) is only true for exclusive
- * mode. Shell windows are skipped by class — the desktop, the taskbar and the Start menu
- * all report full-screen rectangles.
+ * Geometry is the whole test here. A maximised window stops at the work area, so it does
+ * not qualify; a full-screen or borderless one includes the taskbar's strip. Window styles
+ * are useless as a test: borderless full-screen games keep a plain WS_POPUP or even the
+ * caption style, and Windows' own "a full-screen D3D application is running" state
+ * (SHQueryUserNotificationState) is only true for exclusive mode. Shell windows are
+ * skipped by class — the desktop, the taskbar and the Start menu all report full-screen
+ * rectangles. Telling a *game* from other full-screen windows is the caller's job; this
+ * only reports what is there.
  *
- * @returns {{hwnd: string, className: string, title: string}|null}
+ * @returns {{hwnd: string, className: string, title: string, pid: number|null,
+ *            processName: string, borderless: boolean}|null}
  */
 function fullscreenWindow(bounds, ownHwnd = null, tolerance = 2) {
   const found = load();
@@ -149,7 +155,8 @@ function fullscreenWindow(bounds, ownHwnd = null, tolerance = 2) {
   eachWindow((hwnd) => {
     try {
       if (own && String(hwnd) === own) return true;
-      if (windowPid(hwnd) === selfPid) return true;
+      const pid = windowPid(hwnd);
+      if (pid === selfPid) return true;
       if (!found.isWindowVisible(hwnd)) return true;
       const rect = windowRect(hwnd);
       if (!rect || rect.width < 200 || rect.height < 200) return true;
@@ -159,7 +166,14 @@ function fullscreenWindow(bounds, ownHwnd = null, tolerance = 2) {
       if (rect.y + rect.height < bounds.y + bounds.height - tolerance) return true;
       const className = String(classNameOf(hwnd) || '');
       if (SHELL_CLASSES.has(className.toLowerCase())) return true;
-      hit = { hwnd: String(hwnd), className, title: windowTitle(hwnd) };
+      hit = {
+        hwnd: String(hwnd),
+        className,
+        title: windowTitle(hwnd),
+        pid,
+        processName: processImageName(pid),
+        borderless: isBorderless(hwnd),
+      };
       return false;
     } catch {
       // A window that vanished mid-walk is simply not the one we are looking for.
@@ -167,6 +181,44 @@ function fullscreenWindow(bounds, ownHwnd = null, tolerance = 2) {
     }
   });
   return hit;
+}
+
+/** No caption and no thick frame: a borderless window, which is how games go full screen. */
+function isBorderless(hwnd) {
+  const found = load();
+  if (!found || !hwnd) return false;
+  const style = found.getWindowLong(hwnd, GWL_STYLE);
+  return (style & WS_CAPTION) === 0 && (style & WS_THICKFRAME) === 0;
+}
+
+/**
+ * Executable name (lower case, no extension) behind a process id, or ''.
+ *
+ * This is how a full-screen window is judged to be a game or not: nothing in Windows
+ * answers that question, but "which program is this" is exact, and a video player or a
+ * browser slideshow is reliably identifiable where a borderless game would otherwise look
+ * the same.
+ */
+function processImageName(pid) {
+  const found = load();
+  if (!found || !pid) return '';
+  const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+  let handle = null;
+  try {
+    handle = found.openProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+    if (!handle) return '';
+    const buffer = Buffer.alloc(2048);
+    const size = [1024];
+    if (!found.queryFullProcessImageName(handle, 0, buffer, size)) return '';
+    const full = buffer.toString('utf16le', 0, size[0] * 2);
+    return full.split(/[\\/]/).pop().replace(/\.exe$/i, '').toLowerCase();
+  } catch {
+    return '';
+  } finally {
+    if (handle) {
+      try { found.closeHandle(handle) } catch { /* nothing to do */ }
+    }
+  }
 }
 
 /**
@@ -237,6 +289,11 @@ function foregroundCovers(bounds, ownHwnd) {
 /* ------------------------------------------------------- windows and games ---- */
 
 const GW_HWNDNEXT = 2;
+const GWL_STYLE = -16;
+/** `WS_CAPTION` is `WS_BORDER | WS_DLGFRAME`; with `WS_THICKFRAME` it is what a window
+ *  you can move and resize yourself carries — a borderless window has neither. */
+const WS_CAPTION = 0x00c00000;
+const WS_THICKFRAME = 0x00040000;
 /** `SHQueryUserNotificationState`: a full-screen Direct3D application is running. */
 const STATE_D3D_FULLSCREEN = 3;
 
@@ -384,6 +441,8 @@ module.exports = {
   foregroundCovers,
   foregroundFullscreen,
   fullscreenWindow,
+  isBorderless,
+  processImageName,
   classNameOf,
   handleOf,
   userNotificationState,

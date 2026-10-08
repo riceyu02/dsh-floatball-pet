@@ -6,12 +6,22 @@
 #    page talks to.
 #  * `dsh-desktop-pet` (no subpath) is the client row: the settings page itself, which
 #    declares `dsh.client.inject: ['@deepseek-ai/dsh-client-ui-settings']` in
-#    package.json so DSH mounts it under 设置 → 悬浮球.
+#    package.json so DSH mounts it under 设置 → 灵动岛悬浮球.
+#
+# Game recognition: exclusive full screen is answered by Windows itself (SHQueryUser-
+# NotificationState = "a full-screen Direct3D application is running"). Borderless full
+# screen is not answerable by the system at all, so a borderless window covering the whole
+# display counts as a game unless its program is on a built-in list of things people run
+# full screen without playing (browsers, players, slideshows, editors, terminals). The two
+# lists below extend that: `gameProcesses` always counts, `ignoreProcesses` never does.
+# Executable names, without the .exe, comma separated or as a YAML list.
 
 - insert:
     - id: dsh-desktop-pet-host
       name: 'dsh-desktop-pet/host'
       config:
         autoStart: true
+        gameProcesses: []
+        ignoreProcesses: []
     - id: ui-settings-dsh-desktop-pet
       name: dsh-desktop-pet
