@@ -1,5 +1,5 @@
 import { spawn as nodeSpawn } from 'node:child_process'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -8,6 +8,11 @@ export const inject = []
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const EXECUTABLE_NAME = 'DSH悬浮球.exe'
+const REPO = 'riceyu02/dsh-desktop-pet'
+const API_LATEST = `https://api.github.com/repos/${REPO}/releases/latest`
+const ROUTE_PREFIX = '/.dsh-desktop-pet'
+/** Installers to keep: the installed one plus the previous (offline rollback). */
+const KEEP_INSTALLERS = 2
 
 function report(ctx, level, message) {
   try {
@@ -90,6 +95,11 @@ export class PetSupervisor {
     this.compatibilityAttempted = false
   }
 
+  /** True while a helper process is believed to be running. */
+  get running() {
+    return Boolean(this.child) && !this.stopping
+  }
+
   start() {
     if (this.platform !== 'win32') {
       this.log('warn', '当前悬浮球运行时仅支持 Windows，插件已加载但不会创建桌面窗口。')
@@ -160,6 +170,274 @@ export class PetSupervisor {
   }
 }
 
+/* ------------------------------------------------------------------ updates --- */
+
+/** The package version this install carries. */
+export function installedVersion(packageRoot = PACKAGE_ROOT) {
+  try {
+    return JSON.parse(readFileSync(path.join(packageRoot, 'package.json'), 'utf8')).version || '0.0.0'
+  } catch {
+    return '0.0.0'
+  }
+}
+
+export function compareVersions(a, b) {
+  const left = String(a).replace(/^v/, '').split('.')
+  const right = String(b).replace(/^v/, '').split('.')
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    const l = Number.parseInt(left[index] || '0', 10) || 0
+    const r = Number.parseInt(right[index] || '0', 10) || 0
+    if (l !== r) return l > r ? 1 : -1
+  }
+  return 0
+}
+
+/**
+ * Requests go through Electron's net when the host process has it: Chromium then
+ * applies the machine's proxy settings, which is the difference between working and
+ * timing out where github.com is only reachable through a proxy. Plain `fetch` is the
+ * fallback for a headless run.
+ */
+async function fetchJson(url, timeoutMs = 20000) {
+  const viaElectron = await electronRequest(url, { json: true, timeoutMs })
+  if (viaElectron !== undefined) return viaElectron
+  const response = await fetch(url, {
+    headers: { Accept: 'application/vnd.github+json', 'User-Agent': `dsh-desktop-pet/${installedVersion()}` },
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+  if (!response.ok) throw new Error(`GitHub 返回 HTTP ${response.status}`)
+  return response.json()
+}
+
+/** Returns undefined when Electron is not around; throws on a real request failure. */
+async function electronRequest(url, { json = false, timeoutMs = 20000 } = {}) {
+  let net
+  try {
+    ({ net } = await import('electron'))
+  } catch {
+    return undefined
+  }
+  if (!net || typeof net.request !== 'function') return undefined
+  return await new Promise((resolve, reject) => {
+    const request = net.request({ url, redirect: 'follow' })
+    request.setHeader('User-Agent', `dsh-desktop-pet/${installedVersion()}`)
+    if (json) request.setHeader('Accept', 'application/vnd.github+json')
+    const timer = setTimeout(() => {
+      request.abort()
+      reject(new Error('请求超时'))
+    }, timeoutMs)
+    request.on('response', (response) => {
+      const chunks = []
+      response.on('data', (chunk) => chunks.push(chunk))
+      response.on('end', () => {
+        clearTimeout(timer)
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          reject(new Error(`HTTP ${response.statusCode}`))
+          return
+        }
+        const buffer = Buffer.concat(chunks)
+        if (!json) {
+          resolve(buffer)
+          return
+        }
+        try { resolve(JSON.parse(buffer.toString('utf8'))) } catch (error) { reject(error) }
+      })
+      response.on('error', reject)
+    })
+    request.on('error', reject)
+    request.end()
+  })
+}
+
+/** Latest release, compared with what is installed. */
+export async function checkLatest(packageRoot = PACKAGE_ROOT) {
+  const current = installedVersion(packageRoot)
+  const release = await fetchJson(API_LATEST)
+  const latest = String(release.tag_name || '').replace(/^v/, '')
+  const asset = (release.assets || []).find((entry) => /\.tgz$/i.test(entry.name || ''))
+  return {
+    current,
+    latest,
+    newer: Boolean(latest) && compareVersions(latest, current) > 0,
+    pageUrl: release.html_url || `https://github.com/${REPO}/releases`,
+    assetName: asset ? asset.name : null,
+    assetUrl: asset ? asset.browser_download_url : null,
+    assetSize: asset ? asset.size : null,
+  }
+}
+
+/** The DSH CLI entry inside the running installation. */
+export function dshCliPath(resourcesPath = process.resourcesPath) {
+  if (!resourcesPath) return null
+  const candidate = path.join(resourcesPath, 'app.asar', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-desktop-host', 'lib', 'cli.js')
+  return existsSync(candidate) ? candidate : null
+}
+
+function download(url) {
+  return electronRequest(url, { json: false, timeoutMs: 600000 }).then(async (buffer) => {
+    if (buffer !== undefined) return buffer
+    const response = await fetch(url, { signal: AbortSignal.timeout(600000) })
+    if (!response.ok) throw new Error(`下载失败：HTTP ${response.status}`)
+    return Buffer.from(await response.arrayBuffer())
+  })
+}
+
+/**
+ * Delete installers of versions we have moved past (113 MB each, in the directory people
+ * back up). The one the profile points at is never touched — removing that breaks the
+ * next `pnpm install` — and neither are the newest couple, which are the rollback.
+ */
+export function cleanupOldInstallers(profileDir, justInstalled = null) {
+  const directory = path.join(profileDir, 'plugin-tarballs')
+  const removed = []
+  try {
+    const manifest = JSON.parse(readFileSync(path.join(profileDir, 'package.json'), 'utf8'))
+    const spec = manifest.dependencies && manifest.dependencies['dsh-desktop-pet']
+    if (typeof spec !== 'string' || !spec.startsWith('file:')) return removed
+    const keep = new Set([path.resolve(profileDir, spec.slice('file:'.length))])
+    if (justInstalled) keep.add(path.resolve(justInstalled))
+    const names = readdirSync(directory)
+      .filter((entry) => /^dsh-desktop-pet-\d+\.\d+\.\d+\.tgz$/.test(entry))
+      .sort((a, b) => compareVersions(b.slice('dsh-desktop-pet-'.length, -'.tgz'.length), a.slice('dsh-desktop-pet-'.length, -'.tgz'.length)))
+    for (const name of names.slice(0, KEEP_INSTALLERS)) keep.add(path.resolve(directory, name))
+    for (const name of names) {
+      const full = path.resolve(directory, name)
+      if (keep.has(full)) continue
+      try {
+        rmSync(full, { force: true })
+        removed.push(name)
+      } catch { /* locked or already gone */ }
+    }
+  } catch {
+    // No readable manifest, no opinion.
+  }
+  return removed
+}
+
+/**
+ * Download the new installer, stop the helper, then let the DSH CLI install it.
+ *
+ * Stopping first is not optional: the helper's executable sits inside the package pnpm
+ * has to replace, and a half-replaced package is a profile DSH cannot boot from. DSH
+ * itself needs a restart afterwards — a new module generation cannot be loaded into a
+ * running process.
+ */
+export async function applyUpdate({ release, profileDir, supervisor, log = () => {} }) {
+  if (!release || !release.assetUrl || !release.assetName) throw new Error('这个 Release 没有可用的 .tgz 附件')
+  const tarballDir = path.join(profileDir, 'plugin-tarballs')
+  mkdirSync(tarballDir, { recursive: true })
+  const target = path.join(tarballDir, release.assetName)
+  if (!existsSync(target)) {
+    const buffer = await download(release.assetUrl)
+    const partial = `${target}.part`
+    writeFileSync(partial, buffer)
+    renameSync(partial, target)
+  }
+
+  supervisor?.stop()
+  await new Promise((resolve) => setTimeout(resolve, 1500))
+
+  const cli = dshCliPath()
+  if (!cli) throw new Error('找不到 DSH 的 CLI，无法自动安装')
+  const result = await new Promise((resolve) => {
+    const child = nodeSpawn(process.execPath, [
+      '--expose-internals', cli, 'plugin', '--profile', path.basename(profileDir), 'add', target,
+    ], { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, windowsHide: true })
+    let output = ''
+    child.stdout?.on('data', (chunk) => { output += chunk })
+    child.stderr?.on('data', (chunk) => { output += chunk })
+    child.once('exit', (code) => resolve({ code, output }))
+    child.once('error', (error) => resolve({ code: -1, output: error.message }))
+  })
+  log(result.code === 0 ? 'info' : 'error', `更新安装结束：code=${result.code}`)
+  const removed = result.code === 0 ? cleanupOldInstallers(profileDir, target) : []
+  if (removed.length) log('info', `已清理旧安装包：${removed.join(', ')}`)
+  return { ok: result.code === 0, code: result.code, tarball: target, removed, output: result.output.slice(-2000) }
+}
+
+/* ------------------------------------------------------------------- routes --- */
+
+function sendJson(res, status, payload) {
+  const body = JSON.stringify(payload)
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+  res.end(body)
+}
+
+async function readJsonBody(req) {
+  const chunks = []
+  for await (const chunk of req) chunks.push(chunk)
+  const text = Buffer.concat(chunks).toString('utf8').trim()
+  if (!text) return {}
+  try { return JSON.parse(text) } catch { return {} }
+}
+
+/**
+ * What the settings page inside DSH talks to. Client plugins reach their host over HTTP
+ * on the same origin (the pattern the other desktop plugins use), so the page can read
+ * state and ask for an update without knowing about cordis services.
+ */
+function registerRoutes(ctx, state) {
+  const webServer = typeof ctx?.get === 'function' ? ctx.get('webServer') : null
+  if (!webServer || typeof webServer.register !== 'function') {
+    report(ctx, 'warn', 'webServer 服务不可用：DSH 设置页里的悬浮球面板不会出现。')
+    return null
+  }
+  return webServer.register({
+    kind: 'prefix',
+    path: ROUTE_PREFIX,
+    handler: async (req, res) => {
+      const url = new URL(req.url || '/', 'http://127.0.0.1')
+      const route = url.pathname.slice(ROUTE_PREFIX.length) || '/'
+      try {
+        if (req.method === 'GET' && (route === '/' || route === '/status')) {
+          sendJson(res, 200, {
+            ok: true,
+            version: installedVersion(),
+            profile: path.basename(state.profileDir),
+            running: state.supervisor.running,
+            enabled: state.enabled,
+            runtimeReady: Boolean(state.supervisor.runtimePath),
+            canUpdate: Boolean(dshCliPath()),
+          })
+          return
+        }
+        if (req.method === 'POST' && route === '/ball') {
+          const body = await readJsonBody(req)
+          const enabled = body.enabled !== false
+          state.setEnabled(enabled)
+          sendJson(res, 200, { ok: true, enabled, running: state.supervisor.running })
+          return
+        }
+        if (req.method === 'POST' && route === '/check') {
+          sendJson(res, 200, { ok: true, ...(await checkLatest()) })
+          return
+        }
+        if (req.method === 'POST' && route === '/update') {
+          const body = await readJsonBody(req)
+          const release = body && body.assetUrl ? body : await checkLatest()
+          if (!release.newer && !body.force) {
+            sendJson(res, 200, { ok: true, alreadyLatest: true, version: release.current })
+            return
+          }
+          const result = await applyUpdate({
+            release,
+            profileDir: state.profileDir,
+            supervisor: state.supervisor,
+            log: (level, message) => report(ctx, level, message),
+          })
+          state.enabled = true
+          sendJson(res, 200, { ...result, version: release.latest, restartRequired: result.ok })
+          return
+        }
+        sendJson(res, 404, { ok: false, error: `unknown route ${route}` })
+      } catch (error) {
+        report(ctx, 'error', `设置页接口出错：${error.message}`)
+        sendJson(res, 500, { ok: false, error: error.message })
+      }
+    },
+  })
+}
+
 export function apply(ctx, config = {}) {
   const profileContext = typeof ctx?.get === 'function' ? ctx.get('profileContext') : null
   const profileDir = path.resolve(
@@ -177,8 +455,42 @@ export function apply(ctx, config = {}) {
     log: (level, message) => report(ctx, level, message),
   })
 
+  // Switching the ball off from the DSH settings page only stops the helper. Every
+  // preference of the island lives in the pet's own store and is left untouched; the
+  // choice is remembered so restarting DSH does not silently bring the ball back.
+  const switchFile = path.join(userDataDir, 'ball-enabled.json')
+  const readEnabled = () => {
+    try {
+      return JSON.parse(readFileSync(switchFile, 'utf8')).enabled !== false
+    } catch {
+      return config.autoStart !== false
+    }
+  }
+  const state = {
+    profileDir,
+    supervisor,
+    enabled: readEnabled(),
+    setEnabled(enabled) {
+      state.enabled = enabled
+      try {
+        mkdirSync(userDataDir, { recursive: true })
+        writeFileSync(switchFile, JSON.stringify({ enabled, at: Date.now() }, null, 2))
+      } catch (error) {
+        report(ctx, 'warn', `记不住悬浮球开关状态：${error.message}`)
+      }
+      if (enabled) supervisor.start()
+      else supervisor.stop()
+    },
+  }
+
+  const routeDisposer = registerRoutes(ctx, state)
+
   ctx.effect(() => {
-    if (config.autoStart !== false) supervisor.start()
-    return () => supervisor.stop()
+    if (state.enabled) supervisor.start()
+    else report(ctx, 'info', '悬浮球在 DSH 设置页里被关掉了，本次不启动。')
+    return () => {
+      supervisor.stop()
+      try { routeDisposer?.() } catch { /* already disposed */ }
+    }
   })
 }

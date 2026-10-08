@@ -24,6 +24,7 @@ if (!fs.existsSync(path.join(RUNTIME, 'DSH悬浮球.exe')) && !fs.existsSync(pat
 
 fs.mkdirSync(STAGE, { recursive: true });
 fs.cpSync(path.join(ROOT, 'plugin'), path.join(STAGE, 'plugin'), { recursive: true });
+fs.copyFileSync(path.join(ROOT, 'client.js'), path.join(STAGE, 'client.js'));
 fs.copyFileSync(path.join(ROOT, 'cordis.patch.yml'), path.join(STAGE, 'cordis.patch.yml'));
 fs.copyFileSync(path.join(ROOT, 'README.md'), path.join(STAGE, 'README.md'));
 fs.copyFileSync(path.join(ROOT, 'LICENSE'), path.join(STAGE, 'LICENSE'));
@@ -45,15 +46,22 @@ const manifest = {
   exports: {
     '.': './plugin/host.mjs',
     './host': './plugin/host.mjs',
+    './client': './client.js',
     './package.json': './package.json',
   },
-  files: ['plugin', 'runtime', 'cordis.patch.yml', 'README.md', 'LICENSE', 'THIRD-PARTY-NOTICES.md'],
+  files: ['plugin', 'client.js', 'runtime', 'cordis.patch.yml', 'README.md', 'LICENSE', 'THIRD-PARTY-NOTICES.md'],
   os: ['win32'],
   cpu: ['x64'],
   engines: { node: '>=22', dsh: '>=0.1.7-rc.2 <0.3.0-0' },
   peerDependencies: { '@deepseek-ai/cordis': '^4.0.4' },
   peerDependenciesMeta: { '@deepseek-ai/cordis': { optional: true } },
-  dsh: { bundle: { patch: './cordis.patch.yml' } },
+  dsh: {
+    bundle: { patch: './cordis.patch.yml' },
+    // The settings page inside DSH: the loader mounts a package with this field as a
+    // client plugin under the settings UI, which is what the row in cordis.patch.yml
+    // refers to.
+    client: { inject: ['@deepseek-ai/dsh-client-ui-settings'], platform: 'web' },
+  },
 };
 fs.writeFileSync(path.join(STAGE, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 

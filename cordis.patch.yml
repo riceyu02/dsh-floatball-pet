@@ -1,10 +1,17 @@
-# DSH desktop-pet bundle: the host row owns the separate transparent Electron
-# helper.  Keeping the helper out of DSH's main BrowserWindow isolates crashes,
-# focus rules and the Electron single-instance lock.
+# DSH desktop-pet bundle.
+#
+#  * `dsh-desktop-pet/host` is the host row: it owns the separate transparent Electron
+#    helper (keeping it out of DSH's own BrowserWindow isolates crashes, focus rules and
+#    the Electron single-instance lock) and serves the small HTTP surface the settings
+#    page talks to.
+#  * `dsh-desktop-pet` (no subpath) is the client row: the settings page itself, which
+#    declares `dsh.client.inject: ['@deepseek-ai/dsh-client-ui-settings']` in
+#    package.json so DSH mounts it under 设置 → 悬浮球.
 
 - insert:
     - id: dsh-desktop-pet-host
       name: 'dsh-desktop-pet/host'
       config:
         autoStart: true
-
+    - id: ui-settings-dsh-desktop-pet
+      name: dsh-desktop-pet

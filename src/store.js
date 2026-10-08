@@ -15,12 +15,6 @@ const DEFAULTS = {
   ballImage: null,
   showBalance: true,
   showUptime: true,
-  // Game handling: the pet steps aside for a game window instead of covering it. Full
-  // screen games are recognised by Windows itself; a windowed one has to be marked by
-  // hand, because nothing in the system can tell a game from any other large window.
-  gameMode: true,
-  // { pid, title, class } of the marked game window, or null.
-  gameWindow: null,
 };
 
 class Store {

@@ -234,7 +234,6 @@ const TOPMOST_GUARD_MS = 250;
 const TOPMOST_GUARD_DRAG_MS = 60;
 let topmostGuardTimer = null;
 /** True while the pet is deliberately hidden because a game is in the way. */
-let gameHidden = false;
 /** True while a full-screen window is in front — the pet then deliberately stays behind it. */
 let topmostSuppressed = false;
 let lastSizeTick = 0;
@@ -832,15 +831,6 @@ function snapshot() {
       showBalance: store.data.showBalance,
       showUptime: store.data.showUptime,
       managedByDsh: PLUGIN_MANAGED,
-      gameMode: store.data.gameMode !== false,
-      gameWindow: store.data.gameWindow || null,
-    },
-    update: {
-      current: update.currentVersion(),
-      last: update.lastResult(),
-      // Installing for the user needs the profile and the CLI, which only exist when
-      // DSH owns this process; standalone runs can still check and download by hand.
-      auto: PLUGIN_MANAGED && Boolean(update.profileDir()),
     },
     layout: computeLayout(),
     hover: { islandOpen, panelOpen },
@@ -1168,53 +1158,10 @@ function createWindow() {
         topmostGuardTimer.unref?.();
         return;
       }
-      const bounds = screen.getDisplayNearestPoint({
-        x: Math.round(store.data.centerX || 0),
-        y: Math.round(store.data.centerY || 0),
-      }).bounds;
-      // Game handling, in the three cases the user asked for:
-      //
-      //  1. No game around: the pet is simply always on top — a maximised or even a
-      //     full-screen *ordinary* window is not a reason to hide (that was the old
-      //     rule, and it made the ball vanish behind a full-screen browser).
-      //  2. A windowed game is marked: the pet stays on top of ordinary windows, but
-      //     gets out of the game's way — while the game is the window actually in front
-      //     at the ball's position, the ball hides. Move another window over the game
-      //     and the ball is visible again on top of it; move that window away and the
-      //     ball hides again, because the game is back in front.
-      //  3. A full-screen game: Windows reports it (a full-screen D3D application), or
-      //     the marked game covers the display — then the ball stays hidden no matter
-      //     what else is opened.
-      const enabled = store.data.gameMode !== false;
-      const marked = enabled && store.data.gameWindow ? store.data.gameWindow : null;
-      const fullscreenGame = enabled
-        && (win32.d3dFullscreenRunning() || (marked && win32.processCoversDisplay(marked.pid, bounds)));
-      const centre = {
-        x: Math.round(store.data.centerX || 0),
-        y: Math.round(store.data.centerY || 0),
-      };
-      let reason = null;
-      if (fullscreenGame) reason = 'full-screen game';
-      else if (marked) {
-        const beneath = win32.windowBelow(centre, handle);
-        if (beneath && beneath.pid === marked.pid) reason = `game window in front (${beneath.title.slice(0, 40)})`;
-      }
-
-      if (reason) {
-        if (!gameHidden) {
-          gameHidden = true;
-          log('hiding for the game:', reason);
-          win.hide();
-        }
-        topmostGuardTimer = setTimeout(guardTick, dragging ? TOPMOST_GUARD_DRAG_MS : TOPMOST_GUARD_MS);
-        topmostGuardTimer.unref?.();
-        return;
-      }
-      if (gameHidden) {
-        gameHidden = false;
-        log('game no longer in front — showing the ball again');
-        win.showInactive();
-      }
+      // Always on top, full stop. The pet used to step aside for full-screen windows,
+      // and later for marked game windows; both were removed on request — the ball now
+      // stays in the topmost band whatever else is running, and the only thing this
+      // loop does is put the bit back when something else drops it.
       win32.ensureTopmost(handle);
       // Dragging moves and restyles the window on every frame, so the bit needs a much
       // tighter loop than when the pet is sitting still.
@@ -1512,70 +1459,6 @@ function registerIpc() {
     return snapshot();
   });
 
-  /**
-   * Windows the user can mark as "the game". Nothing in Windows says which window is a
-   * game, so for a windowed one this list is the only honest answer; a full-screen D3D
-   * game needs no marking at all (see the guardian in createWindow).
-   */
-  ipcMain.handle('pet:list-windows', () => {
-    if (!win32.available()) return { ok: false, error: '这台机器上没有可用的原生接口（koffi）' };
-    try {
-      const windows = win32.listWindows()
-        .filter((entry) => entry.rect && entry.rect.width > 200 && entry.rect.height > 150)
-        .map(({ hwnd, title, pid, class: cls, rect }) => ({ hwnd, title, pid, class: cls, rect }));
-      return { ok: true, windows };
-    } catch (error) {
-      return { ok: false, error: error.message };
-    }
-  });
-
-  ipcMain.handle('pet:set-game-window', (_event, target) => {
-    const next = target && Number.isFinite(target.pid)
-      ? { pid: target.pid, title: String(target.title || '').slice(0, 120), class: String(target.class || '') }
-      : null;
-    store.save({ gameWindow: next });
-    log(next ? `game window marked: ${next.title} (pid ${next.pid})` : 'game window marker cleared');
-    push();
-    return { ok: true, gameWindow: next };
-  });
-
-  /** Ask GitHub whether a newer release exists. Resolves with the answer or the reason. */
-  ipcMain.handle('pet:update-check', async () => {    try {
-      return { ok: true, ...(await update.checkLatest()) };
-    } catch (error) {
-      log('update check failed', error.message);
-      return { ok: false, current: update.currentVersion(), error: error.message };
-    }
-  });
-
-  /**
-   * Stage the new release and hand the install to a detached script, then quit: the
-   * helper's own executable sits inside the package pnpm has to replace, so nothing
-   * can be replaced while this process lives.
-   */
-  ipcMain.handle('pet:update-apply', async (_event, release) => {
-    try {
-      // The focus helper is a detached process running this package's own executable, so
-      // it keeps runtime\ locked after this process exits. Stopping it here is what lets
-      // the installer's wait finish in a second or two instead of timing out — and the
-      // installer refuses to install while anything out of the package is still alive,
-      // because a half-replaced package is a profile DSH cannot boot from.
-      try {
-        await dsh.stopFocusAgent();
-        log('focus helper stopped for the update');
-      } catch (error) {
-        log('could not stop the focus helper', error.message);
-      }
-      const staged = await update.stageAndApply(release, lastProbe.exePath);
-      log('update staged', staged.version, staged.tarball);
-      setTimeout(() => app.quit(), 1200);
-      return { ok: true, using: staged.version, via: 'restart' };
-    } catch (error) {
-      log('update apply failed', error.message);
-      return { ok: false, error: error.message };
-    }
-  });
-
   ipcMain.handle('pet:open-dsh', async () => {
     // Decide on a fresh probe, not the cached one: the cached value can be up to
     // PROBE_INTERVAL_MS old, and acting on a stale "not running" makes the click
@@ -1680,7 +1563,6 @@ function registerIpc() {
     if (typeof patch.islandPinned === 'boolean') clean.islandPinned = patch.islandPinned;
     if (typeof patch.showBalance === 'boolean') clean.showBalance = patch.showBalance;
     if (typeof patch.showUptime === 'boolean') clean.showUptime = patch.showUptime;
-    if (typeof patch.gameMode === 'boolean') clean.gameMode = patch.gameMode;
     if (Number.isFinite(patch.centerX) && Number.isFinite(patch.centerY)) {
       const centre = clampToDisplay(patch.centerX, patch.centerY);
       clean.centerX = centre.centerX;

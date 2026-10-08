@@ -36,15 +36,6 @@ const lineBalance = document.getElementById('lineBalance');
 const lineUptime = document.getElementById('lineUptime');
 const islandInner = document.getElementById('islandInner');
 const avatar = document.getElementById('avatar');
-const versionOut = document.getElementById('versionOut');
-const checkUpdateBtn = document.getElementById('checkUpdate');
-const applyUpdateBtn = document.getElementById('applyUpdate');
-const updateHint = document.getElementById('updateHint');
-const gameWindowName = document.getElementById('gameWindowName');
-const gameModeInput = document.getElementById('gameMode');
-const pickGameWindowBtn = document.getElementById('pickGameWindow');
-const clearGameWindowBtn = document.getElementById('clearGameWindow');
-const gameWindowList = document.getElementById('gameWindowList');
 
 /** Throttled diagnostics, only when the window was opened with ?debug=1. */
 const DEBUG = new URLSearchParams(location.search).get('debug') === '1';
@@ -297,124 +288,6 @@ clearBallImageBtn.addEventListener('click', () => {
   api.clearBallImage();
 });
 
-/* ----------------------------------------------------------------- game window */
-
-// Windows has no idea which window is a game, so a windowed one is marked by hand: the
-// list is every visible window with a title, and the choice is remembered by pid.
-gameModeInput.addEventListener('change', () => {
-  api.set({ gameMode: gameModeInput.checked });
-});
-
-pickGameWindowBtn.addEventListener('click', async () => {
-  if (!gameWindowList.hidden) {
-    gameWindowList.hidden = true;
-    return;
-  }
-  const result = await api.listWindows();
-  if (!result || !result.ok) {
-    gameWindowName.textContent = (result && result.error) || '读不到窗口列表';
-    return;
-  }
-  gameWindowList.innerHTML = '';
-  for (const entry of result.windows) {
-    const option = document.createElement('option');
-    option.value = String(entry.pid);
-    option.dataset.pid = String(entry.pid);
-    option.dataset.title = entry.title;
-    option.dataset.class = entry.class;
-    option.textContent = `${entry.title}  ·  ${entry.class}`;
-    gameWindowList.appendChild(option);
-  }
-  gameWindowList.hidden = result.windows.length === 0;
-  if (result.windows.length === 0) gameWindowName.textContent = '没找到可选窗口';
-});
-
-gameWindowList.addEventListener('change', async () => {
-  const option = gameWindowList.selectedOptions[0];
-  if (!option) return;
-  gameWindowList.hidden = true;
-  await api.setGameWindow({
-    pid: Number(option.dataset.pid),
-    title: option.dataset.title,
-    class: option.dataset.class,
-  });
-});
-
-clearGameWindowBtn.addEventListener('click', async () => {
-  gameWindowList.hidden = true;
-  await api.setGameWindow(null);
-});
-
-/* ------------------------------------------------------------------- update */
-
-/** The release the panel is offering to install, filled in by a successful check. */
-let pendingRelease = null;
-/** False when this run cannot install by itself (standalone, no profile/CLI). */
-let updateAuto = true;
-
-function renderUpdate(info) {
-  if (!info) return;
-  if (info.current) versionOut.textContent = `v${info.current}`;
-  updateAuto = info.auto !== false;
-  if (!updateAuto) {
-    updateHint.textContent = '独立模式下只能检查版本；装插件请用 DSH 的插件页或命令行';
-  }
-  // The detached installer writes its outcome where the next start reads it, so a
-  // finished (or failed) update is visible the first time the panel is opened.
-  const last = info.last;
-  if (last && last.ok) {
-    const cleaned = Array.isArray(last.removed) && last.removed.length
-      ? `；清掉了 ${last.removed.length} 个旧安装包`
-      : '';
-    updateHint.textContent = `已更新到 v${last.version}${cleaned}；重启 DSH 生效`;
-  }
-  else if (last && last.ok === false) {
-    const why = last.reason === 'helper-running'
-      ? '还有悬浮球相关进程在跑，为避免只装一半，安装已中止（安装没有被改动）'
-      : `安装没成功（退出码 ${last.code}）`;
-    updateHint.textContent = `上次更新 v${last.version} 未完成：${why}。可以直接再试一次`;
-    if (last.recovery) updateHint.textContent += `；万一 DSH 起不来，依次执行：${last.recovery.replace(/\n/g, ' ')}`;
-  }
-}
-
-checkUpdateBtn.addEventListener('click', async () => {
-  checkUpdateBtn.disabled = true;
-  applyUpdateBtn.hidden = true;
-  updateHint.textContent = '正在查询 GitHub…';
-  const result = await api.checkUpdate();
-  checkUpdateBtn.disabled = false;
-  if (!result || !result.ok) {
-    updateHint.textContent = `检查失败：${(result && result.error) || '未知错误'}`;
-    return;
-  }
-  if (result.current) versionOut.textContent = `v${result.current}`;
-  if (!result.newer) {
-    updateHint.textContent = `已是最新版本（v${result.current}）`;
-    return;
-  }
-  pendingRelease = result;
-  const size = result.assetSize ? `，安装包 ${(result.assetSize / 1048576).toFixed(1)} MB` : '';
-  const page = result.pageUrl ? `；下载页 ${result.pageUrl}` : '';
-  updateHint.textContent = updateAuto
-    ? `发现 v${result.latest}（当前 v${result.current}）${size}`
-    : `发现 v${result.latest}（当前 v${result.current}）${size}${page}`;
-  if (!updateAuto) return;
-  applyUpdateBtn.textContent = `更新到 v${result.latest}`;
-  applyUpdateBtn.hidden = false;
-});
-
-applyUpdateBtn.addEventListener('click', async () => {
-  if (!pendingRelease || !updateAuto) return;
-  applyUpdateBtn.disabled = true;
-  updateHint.textContent = `正在下载 v${pendingRelease.latest}…下载完悬浮球会退出，期间请勿重开 DSH`;
-  const result = await api.applyUpdate(pendingRelease);
-  if (!result || !result.ok) {
-    applyUpdateBtn.disabled = false;
-    updateHint.textContent = `更新失败：${(result && result.error) || '未知错误'}`;
-    return;
-  }
-  updateHint.textContent = `正在安装 v${result.using}；完成后重启 DSH 即可`;
-});
 
 /* --------------------------------------------------------------------- data */
 
@@ -609,12 +482,6 @@ function apply(snapshot) {
   quitBtn.title = config.managedByDsh ? '关闭到下次启动 DSH' : '';
   pinIslandInput.checked = !!config.islandPinned;
 
-  gameModeInput.checked = config.gameMode !== false;
-  gameWindowName.textContent = config.gameWindow
-    ? (config.gameWindow.title || `pid ${config.gameWindow.pid}`)
-    : '未标记';
-
-  renderUpdate(snapshot.update);
 
   applyBallImage(config.ballImage);
 

@@ -14,14 +14,6 @@ contextBridge.exposeInMainWorld('pet', {
   clearBallImage: () => ipcRenderer.invoke('pet:clear-ball-image'),
   /** Persist one or more preference changes. */
   set: (patch) => ipcRenderer.send('pet:set', patch),
-  /** Ask GitHub whether a newer release exists. */
-  checkUpdate: () => ipcRenderer.invoke('pet:update-check'),
-  /** Download the given release and schedule the install (the pet then exits). */
-  applyUpdate: (release) => ipcRenderer.invoke('pet:update-apply', release),
-  /** Visible windows with titles, for the "which one is the game" picker. */
-  listWindows: () => ipcRenderer.invoke('pet:list-windows'),
-  /** Mark a window (by pid) as the game, or pass null to clear the marker. */
-  setGameWindow: (target) => ipcRenderer.invoke('pet:set-game-window', target),
   /** Report the measured settings-panel box so the window can reserve room. */
   setMetrics: (metrics) => ipcRenderer.send('pet:metrics', metrics),
   /** Debug only: report what the renderer's DOM actually looks like. */
