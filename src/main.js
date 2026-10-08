@@ -1158,10 +1158,31 @@ function createWindow() {
         topmostGuardTimer.unref?.();
         return;
       }
-      // Always on top, full stop. The pet used to step aside for full-screen windows,
-      // and later for marked game windows; both were removed on request — the ball now
-      // stays in the topmost band whatever else is running, and the only thing this
-      // loop does is put the bit back when something else drops it.
+      // While any full-screen or borderless-full-screen window is on this display, the pet
+      // gets out of the way entirely — the window is hidden, not merely dropped out of the
+      // topmost band, so nothing of the ball shows over the game. Otherwise the ball is
+      // simply always on top. Geometry is the test (see win32.fullscreenWindow): a
+      // maximised window stops at the work area and does not count, a full-screen one
+      // includes the taskbar strip. The shell is skipped by class.
+      const bounds = screen.getDisplayNearestPoint({
+        x: Math.round(store.data.centerX || 0),
+        y: Math.round(store.data.centerY || 0),
+      }).bounds;
+      const full = win32.fullscreenWindow(bounds, handle);
+      if (full && !topmostSuppressed) {
+        topmostSuppressed = true;
+        log(`full-screen window present — hiding the pet (class=${full.className} title="${full.title.slice(0, 60)}")`);
+        win.hide();
+      } else if (!full && topmostSuppressed) {
+        topmostSuppressed = false;
+        log('full-screen window gone — showing the pet again');
+        win.showInactive();
+      }
+      if (topmostSuppressed) {
+        topmostGuardTimer = setTimeout(guardTick, dragging ? TOPMOST_GUARD_DRAG_MS : TOPMOST_GUARD_MS);
+        topmostGuardTimer.unref?.();
+        return;
+      }
       win32.ensureTopmost(handle);
       // Dragging moves and restyles the window on every frame, so the bit needs a much
       // tighter loop than when the pet is sitting still.

@@ -127,6 +127,49 @@ function isTopmost(hwnd) {
 }
 
 /**
+ * The first visible window, in z-order, that covers a whole display — a full-screen or
+ * borderless-full-screen window, i.e. one that owns the screen rather than sharing it.
+ *
+ * Geometry is the whole test on purpose. A maximised window stops at the work area, so it
+ * does not qualify; a full-screen or borderless one includes the taskbar's strip. Window
+ * styles were the obvious alternative and are useless here: borderless full-screen games
+ * keep a plain WS_POPUP or even the caption style, and Windows' own "a full-screen D3D
+ * application is running" state (SHQueryUserNotificationState) is only true for exclusive
+ * mode. Shell windows are skipped by class — the desktop, the taskbar and the Start menu
+ * all report full-screen rectangles.
+ *
+ * @returns {{hwnd: string, className: string, title: string}|null}
+ */
+function fullscreenWindow(bounds, ownHwnd = null, tolerance = 2) {
+  const found = load();
+  if (!found || !bounds) return null;
+  const own = ownHwnd === null || ownHwnd === undefined ? null : String(ownHwnd);
+  const selfPid = process.pid;
+  let hit = null;
+  eachWindow((hwnd) => {
+    try {
+      if (own && String(hwnd) === own) return true;
+      if (windowPid(hwnd) === selfPid) return true;
+      if (!found.isWindowVisible(hwnd)) return true;
+      const rect = windowRect(hwnd);
+      if (!rect || rect.width < 200 || rect.height < 200) return true;
+      if (rect.x > bounds.x + tolerance) return true;
+      if (rect.y > bounds.y + tolerance) return true;
+      if (rect.x + rect.width < bounds.x + bounds.width - tolerance) return true;
+      if (rect.y + rect.height < bounds.y + bounds.height - tolerance) return true;
+      const className = String(classNameOf(hwnd) || '');
+      if (SHELL_CLASSES.has(className.toLowerCase())) return true;
+      hit = { hwnd: String(hwnd), className, title: windowTitle(hwnd) };
+      return false;
+    } catch {
+      // A window that vanished mid-walk is simply not the one we are looking for.
+      return true;
+    }
+  });
+  return hit;
+}
+
+/**
  * Write the topmost bit straight through.
  * @returns {boolean} true when the call went out.
  */
@@ -340,6 +383,7 @@ module.exports = {
   ensureTopmost,
   foregroundCovers,
   foregroundFullscreen,
+  fullscreenWindow,
   classNameOf,
   handleOf,
   userNotificationState,
