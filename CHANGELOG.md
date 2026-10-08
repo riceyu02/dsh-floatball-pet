@@ -23,6 +23,11 @@
   而 pnpm 拉 git 依赖时是在自己的构建目录里打包（路径里并没有 `node_modules`），于是**装出来的
   包里没有运行时**。现在改为看这棵树有没有 `.git`：工作副本跳过，抓取来的副本才组装；
   并且 npm 11 拦截 Electron 的 postinstall 时会自动补下二进制。已在两种情形下分别实测。
+- **修复** `tools/prepare-install.cjs`：只检查 `electron.exe` 存在是不够的——解压被中途打断
+  （安装失败时 pnpm 会杀整棵进程树）会留下一个"有 exe、缺 `ffmpeg.dll` 和 locale"的残缺
+  dist，而 npm 不会为它认为已安装的包重跑 postinstall。实测这种运行时**根本起不来**。
+  现在按 `ffmpeg.dll` / `icudtl.dat` / `resources.pak` / `v8_context_snapshot.bin` 判断完整性，
+  不完整就删掉重下，并在下载后复查。
 - **文档**：`github:` 简写会被解析成 SSH（无 key 的机器报 `Host key verification failed`），
   改为给出 `git+https://…` 写法；`allowBuilds` 的键是「包名@解析出的地址」而非裸包名，
   按 pnpm 打印的原文照抄。

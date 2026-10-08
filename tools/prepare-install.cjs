@@ -31,31 +31,61 @@ const ROOT = path.resolve(__dirname, '..');
 const RUNTIME = path.join(ROOT, 'runtime');
 const ELECTRON_DIST = path.join(ROOT, 'node_modules', 'electron', 'dist');
 const EXECUTABLE_NAMES = ['DSH悬浮球.exe', 'electron.exe', 'electron'];
+// `electron.exe` alone is not proof that the distribution is complete: an extraction
+// killed halfway (pnpm stops a whole process tree when an install fails) leaves the
+// executable behind without the shared libraries and locale paks it needs, and npm
+// will not run the postinstall again for a package it considers installed. A measured
+// casualty of exactly that: a runtime with electron.exe but no ffmpeg.dll, which
+// cannot start at all.
+const REQUIRED_IN_DIST = [
+  ...EXECUTABLE_NAMES,
+  'ffmpeg.dll',
+  'icudtl.dat',
+  'resources.pak',
+  'v8_context_snapshot.bin',
+];
 
 function runtimeIsBuilt() {
   return EXECUTABLE_NAMES.some((name) => fs.existsSync(path.join(RUNTIME, name)));
 }
 
 function electronIsDownloaded() {
-  return EXECUTABLE_NAMES.some((name) => fs.existsSync(path.join(ELECTRON_DIST, name)));
+  return REQUIRED_IN_DIST.every((name) => fs.existsSync(path.join(ELECTRON_DIST, name)));
 }
 
-/** npm 11 blocks electron's postinstall; the package ships the same downloader. */
+/**
+ * npm 11 blocks electron's postinstall, and an interrupted extraction is never
+ * repaired by a later install. Removing the dist first makes the downloader redo the
+ * whole extraction rather than accepting what is there.
+ */
 function downloadElectron() {
-  const installer = path.join(ROOT, 'node_modules', 'electron', 'install.js');
+  const packageDir = path.join(ROOT, 'node_modules', 'electron');
+  const installer = path.join(packageDir, 'install.js');
   if (!fs.existsSync(installer)) {
     throw new Error(
-      'prepare: Electron is not installed at ' + path.join(ROOT, 'node_modules', 'electron') + '\n'
+      'prepare: Electron is not installed at ' + packageDir + '\n'
       + '  Install dependencies first (`npm install` in a checkout), and if the download failed, retry with a mirror:\n'
       + '    $env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"; npm install',
     );
   }
-  console.log('prepare: Electron binary missing (npm blocked its postinstall), downloading it ...');
+  if (fs.existsSync(ELECTRON_DIST)) {
+    const present = EXECUTABLE_NAMES.filter((name) => fs.existsSync(path.join(ELECTRON_DIST, name)));
+    console.log(`prepare: Electron distribution is incomplete (${present.join(', ') || 'nothing'} present), re-downloading it ...`);
+    fs.rmSync(ELECTRON_DIST, { recursive: true, force: true });
+  } else {
+    console.log('prepare: Electron binary missing (npm blocked its postinstall), downloading it ...');
+  }
   execFileSync(process.execPath, [installer], {
-    cwd: path.join(ROOT, 'node_modules', 'electron'),
+    cwd: packageDir,
     stdio: 'inherit',
     env: process.env,
   });
+  if (!electronIsDownloaded()) {
+    throw new Error(
+      'prepare: Electron did not download completely; check the network or set a mirror:\n'
+      + '  $env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"',
+    );
+  }
 }
 
 function main() {
