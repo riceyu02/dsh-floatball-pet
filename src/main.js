@@ -98,6 +98,10 @@ const PANEL_FALLBACK = { width: 326, height: 232, islandW: 0 };
 
 const BALANCE_INTERVAL_MS = 5 * 60 * 1000;
 const PROCESS_INTERVAL_MS = 15 * 1000;
+// While DSH is not detected, poll fast: under the plugin the ball is started *during*
+// DSH's boot, before its web port listens, so the first probes legitimately see
+// nothing — on the slow interval that showed up as 「未运行」 for up to 15 seconds.
+const PROCESS_FAST_INTERVAL_MS = 2 * 1000;
 /** Cursor poll cadence for hover / click-through decisions. */
 const CURSOR_POLL_MS = 40;
 /**
@@ -1579,7 +1583,17 @@ if (!app.requestSingleInstanceLock()) {
 
     refreshProcess();
     refreshBalance();
-    processTimer = setInterval(refreshProcess, PROCESS_INTERVAL_MS);
+    // Self-scheduling rather than a fixed interval, so the cadence can follow the
+    // state: every 2 s until DSH is seen, then the slow 15 s poll.
+    const scheduleProcessProbe = () => {
+      const delay = lastProbe.running ? PROCESS_INTERVAL_MS : PROCESS_FAST_INTERVAL_MS;
+      processTimer = setTimeout(async () => {
+        await refreshProcess();
+        scheduleProcessProbe();
+      }, delay);
+      processTimer.unref?.();
+    };
+    scheduleProcessProbe();
     balanceTimer = setInterval(refreshBalance, BALANCE_INTERVAL_MS);
     cursorTimer = setInterval(pollCursor, CURSOR_POLL_MS);
 

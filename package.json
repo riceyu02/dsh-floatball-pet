@@ -1,7 +1,7 @@
 {
   "name": "dsh-desktop-pet",
   "productName": "DSH 悬浮球",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "DeepSeek Harness 桌面悬浮球桌宠及可安装 DSH 插件：悬浮球 + 灵动岛（余额 / 运行时间）+ 设置面板，点击悬浮球唤起 DSH。",
   "author": "Riceyu02",
   "license": "MIT",

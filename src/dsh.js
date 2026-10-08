@@ -462,6 +462,8 @@ function focusDllPath() {
 
 /** Start instant we inferred ourselves when Windows could not tell us. */
 let inferredStart = null;
+/** When a probe last found nothing listening on the DSH web port. */
+let lastClosedAt = null;
 
 /**
  * Report whether DeepSeek Harness is up and for how long.
@@ -475,6 +477,7 @@ async function probeDsh() {
 
   if (!alive) {
     inferredStart = null;
+    lastClosedAt = Date.now();
     return { running: false, processes: 0, seconds: null, startedAt: null, exePath: null, port };
   }
 
@@ -482,7 +485,17 @@ async function probeDsh() {
   if (info && info.startedAt !== null) {
     inferredStart = info.startedAt;
   } else if (inferredStart === null) {
-    inferredStart = Date.now();
+    // Windows would not tell us: a restricted token cannot read another process's
+    // StartTime — the very limitation the focus helper exists for. Counting from
+    // "now" is what made the uptime begin when the ball *noticed* DSH rather than when
+    // DSH started. Two better guesses, in order:
+    //   * the last probe that found the port closed — DSH started after it, and the
+    //     fast poll below keeps that within a couple of seconds;
+    //   * this process's own start, which under the plugin is DSH's boot plus ~2 s.
+    inferredStart = lastClosedAt
+      ?? (process.env.DSH_PET_PLUGIN === '1'
+        ? Date.now() - Math.round(process.uptime() * 1000)
+        : Date.now());
   }
 
   const seconds = Math.max(0, Math.floor((Date.now() - inferredStart) / 1000));
