@@ -128,6 +128,36 @@ npm run build:dsh-plugin         # 产出 artifacts\dsh-desktop-pet-0.2.2.tgz
 dsh plugin --profile desktop add "$PWD\artifacts\dsh-desktop-pet-0.2.2.tgz"
 ```
 
+### 让 DSH 的 AI 帮你装（把下面这段发给它就行）
+
+DSH 的 agent 手上有插件管理接口，能自己装完这一套：下载、登记 bundle、处理放行、校验装没装上。
+把下面这段连同链接（或文件）发给对方的 DSH 即可：
+
+> 帮我装这个插件：`https://github.com/riceyu02/dsh-desktop-pet`
+> 用 Release **v0.2.2** 里的 `dsh-desktop-pet-0.2.2.tgz`，装进 `desktop` profile。
+> 需要放行构建脚本就先问我；装完告诉我结果。
+
+对方网络连不上 `github.com` 时，改成把 tgz 直接发给他：
+
+> 这是我给你的插件包 `dsh-desktop-pet-0.2.2.tgz`（DSH 悬浮球桌宠），帮我装进 `desktop` profile。
+
+会发生什么：
+
+| 情形 | 需要人做的事 |
+|---|---|
+| agent 走**应用内**插件管理接口（`plugin_manager`，Creator 模式默认启用） | 基本不用管：实测 `application: "applied"`，**不重启 DSH 也会当场生效**（旧实例退出、新实例自动拉起） |
+| agent 退回**命令行** `dsh plugin --profile desktop add …` | 装完必须**完全退出并重开 DSH** |
+| agent 装的是 **git 路线**（`git+https://…`） | 它会先问你是否放行构建脚本，之后**每换一个 commit 都要再问一次** |
+| agent 的 shell 起不来（Windows 沙箱下 `pwsh` 可能直接起不来，退出码 `0xC0000142`） | 需要把该会话的文件权限放行到 `danger-full-access`，或让对方用 DSH 的插件页手动装 |
+
+两个提醒：
+
+- **确认包是从哪来的。** 让 AI 装插件 = 在那台机器上运行插件作者的代码，这正是 pnpm 要求 build 放行的原因。
+- **长期使用别把 git 依赖挂在 profile 上。** 实测：profile 里存在 git 依赖时，之后任何一次装包都会让 pnpm
+  重新解析它、重跑它的 `prepare`（可能再下一次 Electron）；而应用内安装用的是**净化过的环境**
+  （没有代理、没有 `ELECTRON_MIRROR`），这一步会静默卡到 DSH 的 10 分钟超时。尝鲜可以，长期建议换成
+  tarball：把 tgz 放进 `<profile>\plugin-tarballs\`，依赖写成 `file:` 形式（`dsh-orb` 就是这么放的）。
+
 ### 装上了吗
 
 - `<profile>\package.json` 的 `dsh.profile.bundles` 里会出现 `dsh-desktop-pet`；
