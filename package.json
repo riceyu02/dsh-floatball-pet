@@ -1,17 +1,17 @@
 {
   "name": "dsh-desktop-pet",
   "productName": "DSH 悬浮球",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "DeepSeek Harness 桌面悬浮球桌宠及可安装 DSH 插件：悬浮球 + 灵动岛（余额 / 运行时间）+ 设置面板，点击悬浮球唤起 DSH。",
   "author": "Riceyu02",
   "license": "MIT",
-  "homepage": "https://github.com/Riceyu02/dsh-desktop-pet#readme",
+  "homepage": "https://github.com/riceyu02/dsh-desktop-pet#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Riceyu02/dsh-desktop-pet.git"
+    "url": "git+https://github.com/riceyu02/dsh-desktop-pet.git"
   },
   "bugs": {
-    "url": "https://github.com/Riceyu02/dsh-desktop-pet/issues"
+    "url": "https://github.com/riceyu02/dsh-desktop-pet/issues"
   },
   "keywords": [
     "dsh",
@@ -34,9 +34,19 @@
     "dev": "electron . --dev",
     "pack": "node tools/assemble.cjs",
     "build:dsh-plugin": "node tools/build-dsh-plugin.cjs",
+    "prepare": "node tools/prepare-install.cjs",
     "test": "node --test test/*.test.mjs"
   },
+  "files": [
+    "plugin",
+    "runtime",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.md"
+  ],
   "engines": {
+    "node": ">=22",
     "dsh": ">=0.1.7-rc.2 <0.3.0-0"
   },
   "peerDependencies": {
@@ -54,7 +64,8 @@
   },
   "devDependencies": {
     "electron": "^33.2.0",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "tar": "^7.5.22"
   },
   "build": {
     "appId": "com.dsh.desktop-pet",

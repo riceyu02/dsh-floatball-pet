@@ -5,9 +5,10 @@ node_modules/
 tools/.userdata/
 .pack-test-userdata/
 
-# 生成的独立运行时、DSH bundle 暂存目录与安装包
+# 构建产物：组装好的 Electron 运行时、DSH 插件安装包
 dist/
 artifacts/
+runtime/
 
 # 历史调试备份与本地输出
 tools/*.bak

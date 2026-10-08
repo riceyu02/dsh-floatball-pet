@@ -18,7 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
-const ROOT = 'D:\\deepseek_project\\plugin-project\\dsh-desktop-pet';
+const ROOT = path.resolve(__dirname, '..');
 const OUT_DIR = path.join(ROOT, 'build');
 const DLL = path.join(OUT_DIR, 'PetFocus.dll');
 

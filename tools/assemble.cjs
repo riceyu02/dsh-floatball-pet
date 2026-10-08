@@ -13,7 +13,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const ROOT = 'D:\\deepseek_project\\plugin-project\\dsh-desktop-pet';
+// Repo root, derived from this file so a fresh clone works from any path.
+const ROOT = path.resolve(__dirname, '..');
 const RUNTIME = path.join(ROOT, 'node_modules', 'electron', 'dist');
 // The DSH bundle builder points this at a temporary directory.  Apart from
 // avoiding a second 500 MB checkout copy, that also lets it build while an old
