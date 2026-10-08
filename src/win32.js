@@ -69,13 +69,31 @@ function load() {
       if (!fs.existsSync(candidate)) continue;
       const koffi = require(candidate);
       const user32 = koffi.load('user32.dll');
+      const shell32 = koffi.load('shell32.dll');
+      const enumProc = koffi.proto('bool EnumWindowsProc(void *hwnd, void *param)');
       api = {
         source: candidate,
+        koffi,
         getWindowLong: user32.func('long GetWindowLongA(void *h, int index)'),
         setWindowPos: user32.func('bool SetWindowPos(void *h, void *after, int x, int y, int cx, int cy, unsigned int flags)'),
         getForegroundWindow: user32.func('void *GetForegroundWindow()'),
         getWindowRect: user32.func('bool GetWindowRect(void *h, _Out_ int *rect)'),
         getClassName: user32.func('int GetClassNameA(void *h, _Out_ char *buffer, int count)'),
+        // Wide version on purpose: the ANSI one returns the local code page, which
+        // turns Chinese window titles into mojibake.
+        getWindowText: user32.func('int GetWindowTextW(void *h, _Out_ char *buffer, int count)'),
+        getWindow: user32.func('void *GetWindow(void *h, unsigned int cmd)'),
+        getTopWindow: user32.func('void *GetTopWindow(void *h)'),
+        isWindow: user32.func('bool IsWindow(void *h)'),
+        isWindowVisible: user32.func('bool IsWindowVisible(void *h)'),
+        windowFromPoint: user32.func('void *WindowFromPoint(int x, int y)'),
+        getWindowThreadProcessId: user32.func('unsigned int GetWindowThreadProcessId(void *h, _Out_ unsigned int *pid)'),
+        enumWindows: user32.func('bool EnumWindows(EnumWindowsProc *callback, void *param)'),
+        enumProc,
+        // The call Windows itself makes before showing a notification: 3 means a
+        // full-screen Direct3D application is running, which is as close to "a game is
+        // on" as the system will tell anybody.
+        queryUserNotificationState: shell32.func('int SHQueryUserNotificationState(_Out_ int *state)'),
       };
       return api;
     } catch {
@@ -173,6 +191,147 @@ function foregroundCovers(bounds, ownHwnd) {
   return foregroundFullscreen(bounds, ownHwnd).covered;
 }
 
+/* ------------------------------------------------------- windows and games ---- */
+
+const GW_HWNDNEXT = 2;
+/** `SHQueryUserNotificationState`: a full-screen Direct3D application is running. */
+const STATE_D3D_FULLSCREEN = 3;
+
+/** What Windows thinks is happening: 3 = a full-screen game, 5 = normal, null = unknown. */
+function userNotificationState() {
+  const found = load();
+  if (!found) return null;
+  const state = [0];
+  return found.queryUserNotificationState(state) === 0 ? state[0] : null;
+}
+
+/** Is a full-screen Direct3D application (a game) running, according to Windows? */
+function d3dFullscreenRunning() {
+  return userNotificationState() === STATE_D3D_FULLSCREEN;
+}
+
+/** Process id that owns a window. */
+function windowPid(hwnd) {
+  const found = load();
+  if (!found || !hwnd) return null;
+  const pid = [0];
+  found.getWindowThreadProcessId(hwnd, pid);
+  return pid[0] || null;
+}
+
+/** Title of a window, or '' when it has none. */
+function windowTitle(hwnd) {
+  const found = load();
+  if (!found || !hwnd) return '';
+  const buffer = Buffer.alloc(1024); // UTF-16: 512 characters
+  const length = found.getWindowText(hwnd, buffer, 512);
+  return length ? buffer.toString('utf16le', 0, length * 2) : '';
+}
+
+function windowRect(hwnd) {
+  const found = load();
+  if (!found || !hwnd) return null;
+  const rect = [0, 0, 0, 0];
+  if (!found.getWindowRect(hwnd, rect)) return null;
+  return { x: rect[0], y: rect[1], width: rect[2] - rect[0], height: rect[3] - rect[1] };
+}
+
+/**
+ * Walk the top-level windows in z-order (front to back) without a callback: koffi
+ * callbacks through `EnumWindows` did not survive the trip, and `GetTopWindow` plus
+ * `GetWindow(GW_HWNDNEXT)` needs nothing but plain calls.
+ * @param {(hwnd: bigint) => boolean|void} visit return false to stop early
+ */
+function eachWindow(visit) {
+  const found = load();
+  if (!found) return;
+  let hwnd = found.getTopWindow(null);
+  let guard = 0;
+  while (hwnd && guard < 3000) {
+    guard += 1;
+    if (visit(hwnd) === false) return;
+    hwnd = found.getWindow(hwnd, GW_HWNDNEXT);
+  }
+}
+
+/** Every visible top-level window with a title — what the settings picker lists. */
+function listWindows() {
+  const items = [];
+  eachWindow((hwnd) => {
+    const found = load();
+    if (!found) return false;
+    try {
+      if (!found.isWindowVisible(hwnd)) return true;
+      const title = windowTitle(hwnd);
+      if (!title) return true;
+      items.push({
+        hwnd: String(hwnd),
+        title,
+        class: classNameOf(hwnd),
+        pid: windowPid(hwnd),
+        rect: windowRect(hwnd),
+      });
+    } catch { /* a window that vanished mid-enumeration */ }
+    return true;
+  });
+  return items;
+}
+
+/**
+ * The window the user would see at `point` if the pet's own window were not there.
+ *
+ * Walking down the z-order from our window instead of calling `WindowFromPoint` matters:
+ * the pet is always-on-top, so the point belongs to the pet itself.
+ */
+function windowBelow(point, ownHwnd) {
+  const found = load();
+  if (!found) return null;
+  const contains = (hwnd) => {
+    const rect = windowRect(hwnd);
+    return Boolean(rect)
+      && point.x >= rect.x && point.x < rect.x + rect.width
+      && point.y >= rect.y && point.y < rect.y + rect.height;
+  };
+  if (!ownHwnd) {
+    const hit = found.windowFromPoint(point.x, point.y);
+    return hit ? { hwnd: String(hit), pid: windowPid(hit), class: classNameOf(hit), title: windowTitle(hit) } : null;
+  }
+  let hwnd = found.getWindow(ownHwnd, GW_HWNDNEXT);
+  let guard = 0;
+  while (hwnd && guard < 400) {
+    guard += 1;
+    if (found.isWindowVisible(hwnd) && contains(hwnd)) {
+      return { hwnd: String(hwnd), pid: windowPid(hwnd), class: classNameOf(hwnd), title: windowTitle(hwnd) };
+    }
+    hwnd = found.getWindow(hwnd, GW_HWNDNEXT);
+  }
+  return null;
+}
+
+/** Does a window of that process cover the whole display? (a full-screen game) */
+function processCoversDisplay(pid, bounds) {
+  const found = load();
+  if (!found || !pid) return false;
+  let covered = false;
+  const tolerance = 2;
+  eachWindow((hwnd) => {
+    try {
+      if (!found.isWindowVisible(hwnd)) return true;
+      if (windowPid(hwnd) !== pid) return true;
+      const rect = windowRect(hwnd);
+      if (rect
+        && rect.x <= bounds.x + tolerance && rect.y <= bounds.y + tolerance
+        && rect.x + rect.width >= bounds.x + bounds.width - tolerance
+        && rect.y + rect.height >= bounds.y + bounds.height - tolerance) {
+        covered = true;
+        return false;
+      }
+    } catch { /* ignore */ }
+    return true;
+  });
+  return covered;
+}
+
 module.exports = {
   available,
   source,
@@ -183,4 +342,12 @@ module.exports = {
   foregroundFullscreen,
   classNameOf,
   handleOf,
+  userNotificationState,
+  d3dFullscreenRunning,
+  windowPid,
+  windowTitle,
+  windowRect,
+  listWindows,
+  windowBelow,
+  processCoversDisplay,
 };

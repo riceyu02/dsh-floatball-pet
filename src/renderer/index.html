@@ -65,6 +65,24 @@
 
       <div class="field">
         <div class="field-row">
+          <label>游戏窗口</label>
+          <output id="gameWindowName">未标记</output>
+        </div>
+        <label class="switch-row">
+          <input id="gameMode" type="checkbox" />
+          <span class="switch" aria-hidden="true"><i></i></span>
+          <span class="switch-label">游戏让位</span>
+        </label>
+        <div class="btn-row">
+          <button id="pickGameWindow" class="ghost-btn" type="button">选择窗口…</button>
+          <button id="clearGameWindow" class="ghost-btn" type="button">清除标记</button>
+        </div>
+        <select id="gameWindowList" class="window-list" size="5" hidden></select>
+        <p class="hint">标记后球不会盖在游戏上，游戏全屏时自动隐藏；全屏游戏不用标记（系统能识别）</p>
+      </div>
+
+      <div class="field">
+        <div class="field-row">
           <label>版本</label>
           <output id="versionOut">v—</output>
         </div>

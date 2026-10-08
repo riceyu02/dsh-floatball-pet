@@ -233,6 +233,8 @@ const TOPMOST_GUARD_MS = 250;
 // While the ball is in hand every frame moves and restyles the window.
 const TOPMOST_GUARD_DRAG_MS = 60;
 let topmostGuardTimer = null;
+/** True while the pet is deliberately hidden because a game is in the way. */
+let gameHidden = false;
 /** True while a full-screen window is in front — the pet then deliberately stays behind it. */
 let topmostSuppressed = false;
 let lastSizeTick = 0;
@@ -830,6 +832,8 @@ function snapshot() {
       showBalance: store.data.showBalance,
       showUptime: store.data.showUptime,
       managedByDsh: PLUGIN_MANAGED,
+      gameMode: store.data.gameMode !== false,
+      gameWindow: store.data.gameWindow || null,
     },
     update: {
       current: update.currentVersion(),
@@ -1168,20 +1172,50 @@ function createWindow() {
         x: Math.round(store.data.centerX || 0),
         y: Math.round(store.data.centerY || 0),
       }).bounds;
-      // A game or a video covering the whole display: stop being on top, so the pet
-      // gets out of its way instead of drawing over it. It comes back by itself once
-      // that window is no longer in front — including when the foreground turns out to
-      // be the desktop, the taskbar or the Start menu, which are excluded by class
-      // because their rectangles are just as large.
-      const front = win32.foregroundFullscreen(bounds, handle);
-      if (front.covered !== topmostSuppressed) {
-        topmostSuppressed = front.covered;
-        log(front.covered
-          ? `a full-screen window is in front — topmost dropped (class=${front.className})`
-          : `full-screen window gone — topmost restored (class=${front.className || 'none'})`);
+      // Game handling, in the three cases the user asked for:
+      //
+      //  1. No game around: the pet is simply always on top — a maximised or even a
+      //     full-screen *ordinary* window is not a reason to hide (that was the old
+      //     rule, and it made the ball vanish behind a full-screen browser).
+      //  2. A windowed game is marked: the pet stays on top of ordinary windows, but
+      //     gets out of the game's way — while the game is the window actually in front
+      //     at the ball's position, the ball hides. Move another window over the game
+      //     and the ball is visible again on top of it; move that window away and the
+      //     ball hides again, because the game is back in front.
+      //  3. A full-screen game: Windows reports it (a full-screen D3D application), or
+      //     the marked game covers the display — then the ball stays hidden no matter
+      //     what else is opened.
+      const enabled = store.data.gameMode !== false;
+      const marked = enabled && store.data.gameWindow ? store.data.gameWindow : null;
+      const fullscreenGame = enabled
+        && (win32.d3dFullscreenRunning() || (marked && win32.processCoversDisplay(marked.pid, bounds)));
+      const centre = {
+        x: Math.round(store.data.centerX || 0),
+        y: Math.round(store.data.centerY || 0),
+      };
+      let reason = null;
+      if (fullscreenGame) reason = 'full-screen game';
+      else if (marked) {
+        const beneath = win32.windowBelow(centre, handle);
+        if (beneath && beneath.pid === marked.pid) reason = `game window in front (${beneath.title.slice(0, 40)})`;
       }
-      if (topmostSuppressed) win32.setTopmost(handle, false);
-      else win32.ensureTopmost(handle);
+
+      if (reason) {
+        if (!gameHidden) {
+          gameHidden = true;
+          log('hiding for the game:', reason);
+          win.hide();
+        }
+        topmostGuardTimer = setTimeout(guardTick, dragging ? TOPMOST_GUARD_DRAG_MS : TOPMOST_GUARD_MS);
+        topmostGuardTimer.unref?.();
+        return;
+      }
+      if (gameHidden) {
+        gameHidden = false;
+        log('game no longer in front — showing the ball again');
+        win.showInactive();
+      }
+      win32.ensureTopmost(handle);
       // Dragging moves and restyles the window on every frame, so the bit needs a much
       // tighter loop than when the pet is sitting still.
       topmostGuardTimer = setTimeout(guardTick, dragging ? TOPMOST_GUARD_DRAG_MS : TOPMOST_GUARD_MS);
@@ -1478,9 +1512,35 @@ function registerIpc() {
     return snapshot();
   });
 
-  /** Ask GitHub whether a newer release exists. Resolves with the answer or the reason. */
-  ipcMain.handle('pet:update-check', async () => {
+  /**
+   * Windows the user can mark as "the game". Nothing in Windows says which window is a
+   * game, so for a windowed one this list is the only honest answer; a full-screen D3D
+   * game needs no marking at all (see the guardian in createWindow).
+   */
+  ipcMain.handle('pet:list-windows', () => {
+    if (!win32.available()) return { ok: false, error: '这台机器上没有可用的原生接口（koffi）' };
     try {
+      const windows = win32.listWindows()
+        .filter((entry) => entry.rect && entry.rect.width > 200 && entry.rect.height > 150)
+        .map(({ hwnd, title, pid, class: cls, rect }) => ({ hwnd, title, pid, class: cls, rect }));
+      return { ok: true, windows };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('pet:set-game-window', (_event, target) => {
+    const next = target && Number.isFinite(target.pid)
+      ? { pid: target.pid, title: String(target.title || '').slice(0, 120), class: String(target.class || '') }
+      : null;
+    store.save({ gameWindow: next });
+    log(next ? `game window marked: ${next.title} (pid ${next.pid})` : 'game window marker cleared');
+    push();
+    return { ok: true, gameWindow: next };
+  });
+
+  /** Ask GitHub whether a newer release exists. Resolves with the answer or the reason. */
+  ipcMain.handle('pet:update-check', async () => {    try {
       return { ok: true, ...(await update.checkLatest()) };
     } catch (error) {
       log('update check failed', error.message);
@@ -1620,6 +1680,7 @@ function registerIpc() {
     if (typeof patch.islandPinned === 'boolean') clean.islandPinned = patch.islandPinned;
     if (typeof patch.showBalance === 'boolean') clean.showBalance = patch.showBalance;
     if (typeof patch.showUptime === 'boolean') clean.showUptime = patch.showUptime;
+    if (typeof patch.gameMode === 'boolean') clean.gameMode = patch.gameMode;
     if (Number.isFinite(patch.centerX) && Number.isFinite(patch.centerY)) {
       const centre = clampToDisplay(patch.centerX, patch.centerY);
       clean.centerX = centre.centerX;

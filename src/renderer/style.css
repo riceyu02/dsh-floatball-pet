@@ -484,6 +484,19 @@ input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.22); }
 .panel-foot { display: flex; gap: 8px; margin-top: 2px; }
 /* Same row of buttons as the footer, for the "悬浮球图标" field. */
 .btn-row { display: flex; gap: 8px; }
+/* The window picker for "which window is the game": a plain native-looking list. */
+.window-list {
+  width: 100%;
+  margin-top: 6px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 10.5px;
+}
+.window-list option { padding: 3px 4px; }
 .ghost-btn, .danger-btn {
   flex: 1;
   height: 28px;

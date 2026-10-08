@@ -40,6 +40,11 @@ const versionOut = document.getElementById('versionOut');
 const checkUpdateBtn = document.getElementById('checkUpdate');
 const applyUpdateBtn = document.getElementById('applyUpdate');
 const updateHint = document.getElementById('updateHint');
+const gameWindowName = document.getElementById('gameWindowName');
+const gameModeInput = document.getElementById('gameMode');
+const pickGameWindowBtn = document.getElementById('pickGameWindow');
+const clearGameWindowBtn = document.getElementById('clearGameWindow');
+const gameWindowList = document.getElementById('gameWindowList');
 
 /** Throttled diagnostics, only when the window was opened with ?debug=1. */
 const DEBUG = new URLSearchParams(location.search).get('debug') === '1';
@@ -290,6 +295,54 @@ pickBallImageBtn.addEventListener('click', async () => {
 
 clearBallImageBtn.addEventListener('click', () => {
   api.clearBallImage();
+});
+
+/* ----------------------------------------------------------------- game window */
+
+// Windows has no idea which window is a game, so a windowed one is marked by hand: the
+// list is every visible window with a title, and the choice is remembered by pid.
+gameModeInput.addEventListener('change', () => {
+  api.set({ gameMode: gameModeInput.checked });
+});
+
+pickGameWindowBtn.addEventListener('click', async () => {
+  if (!gameWindowList.hidden) {
+    gameWindowList.hidden = true;
+    return;
+  }
+  const result = await api.listWindows();
+  if (!result || !result.ok) {
+    gameWindowName.textContent = (result && result.error) || '读不到窗口列表';
+    return;
+  }
+  gameWindowList.innerHTML = '';
+  for (const entry of result.windows) {
+    const option = document.createElement('option');
+    option.value = String(entry.pid);
+    option.dataset.pid = String(entry.pid);
+    option.dataset.title = entry.title;
+    option.dataset.class = entry.class;
+    option.textContent = `${entry.title}  ·  ${entry.class}`;
+    gameWindowList.appendChild(option);
+  }
+  gameWindowList.hidden = result.windows.length === 0;
+  if (result.windows.length === 0) gameWindowName.textContent = '没找到可选窗口';
+});
+
+gameWindowList.addEventListener('change', async () => {
+  const option = gameWindowList.selectedOptions[0];
+  if (!option) return;
+  gameWindowList.hidden = true;
+  await api.setGameWindow({
+    pid: Number(option.dataset.pid),
+    title: option.dataset.title,
+    class: option.dataset.class,
+  });
+});
+
+clearGameWindowBtn.addEventListener('click', async () => {
+  gameWindowList.hidden = true;
+  await api.setGameWindow(null);
 });
 
 /* ------------------------------------------------------------------- update */
@@ -555,6 +608,11 @@ function apply(snapshot) {
   quitBtn.textContent = config.managedByDsh ? '本次关闭' : '退出';
   quitBtn.title = config.managedByDsh ? '关闭到下次启动 DSH' : '';
   pinIslandInput.checked = !!config.islandPinned;
+
+  gameModeInput.checked = config.gameMode !== false;
+  gameWindowName.textContent = config.gameWindow
+    ? (config.gameWindow.title || `pid ${config.gameWindow.pid}`)
+    : '未标记';
 
   renderUpdate(snapshot.update);
 
