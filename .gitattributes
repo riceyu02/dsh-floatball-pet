@@ -1,0 +1,18 @@
+# Normalise line endings for every checkout, not just the ones with a global
+# core.autocrlf setting. Two of these are load-bearing:
+#   *.cmd  — cmd.exe reads batch files in the OEM code page and wants CRLF
+#   *.ps1  — Windows PowerShell only recognises a here-string terminator at a CRLF
+#            line start, so a checkout with LF endings breaks those scripts
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binaries git must never touch
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.dll binary
+*.exe binary
+*.tgz binary

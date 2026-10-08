@@ -11,6 +11,8 @@
 - **新增** GitHub Actions 工作流：推 `v*` 标签即自动构建插件包并挂到 Release。
 - **新增** `tools/publish-release.ps1`：在 git 到 github.com 不通的机器上，
   改走 GitHub API 发布 Release 与上传安装包。
+- **新增** `.gitattributes`：统一换行（`.cmd`、`.ps1` 固定 CRLF，其余 LF，二进制不转换），
+  免得 `cmd.exe` 和 Windows PowerShell 在 LF 检出上翻车。
 - **修复** `tools/assemble.cjs`、`tools/build-focus-dll.cjs` 里写死的绝对路径，
   现在从脚本位置推导仓库根目录，任何路径下都能构建。
 - **补齐** `tar` 依赖声明（此前依赖 electron-builder 的传递依赖）、`node >= 22` 引擎声明。

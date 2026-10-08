@@ -1,4 +1,4 @@
-param(
+﻿param(
   # Draft: create/refresh the release and upload the asset, but leave it unpublished.
   # Publish: also flip an existing draft to published.
   [ValidateSet('Draft', 'Publish')]
@@ -20,7 +20,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 
-$manifest = Get-Content (Join-Path $root 'package.json') -Raw | ConvertFrom-Json
+# -Encoding UTF8 matters: package.json carries Chinese text, and Windows PowerShell
+# would otherwise read it in the ANSI code page and fail to parse the JSON.
+$manifest = Get-Content -LiteralPath (Join-Path $root 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $version = $manifest.version
 $tag = "v$version"
 $assetName = "$($manifest.name)-$version.tgz"
@@ -35,8 +37,21 @@ $sha256 = (Get-FileHash -LiteralPath $assetPath -Algorithm SHA256).Hash
 $assetBytes = (Get-Item -LiteralPath $assetPath).Length
 
 # The token lives in Git Credential Manager; ask git for it instead of storing it here.
+# git is allowed to be off PATH here — it only has to exist somewhere findable.
+$gitCommand = (Get-Command git -ErrorAction SilentlyContinue).Source
+if (-not $gitCommand) {
+  $candidates = @(
+    'D:\Git\cmd\git.exe',
+    "$env:ProgramFiles\Git\cmd\git.exe",
+    "${env:ProgramFiles(x86)}\Git\cmd\git.exe",
+    "$env:LOCALAPPDATA\Programs\Git\cmd\git.exe"
+  )
+  $gitCommand = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+}
+if (-not $gitCommand) { throw 'git was not found; it is needed only to read the stored GitHub token.' }
+
 $credentialInput = "protocol=https`nhost=github.com`n`n"
-$credentialLines = $credentialInput | & git credential fill
+$credentialLines = $credentialInput | & $gitCommand credential fill
 $credential = @{}
 foreach ($line in $credentialLines) {
   $separator = $line.IndexOf('=')
@@ -53,31 +68,36 @@ $headers = @{
   'User-Agent'           = 'dsh-desktop-pet-release-helper'
 }
 
-$notes = @"
-发布 $tag。
-
-### 安装
-
-下载附件 ``$assetName``，然后：
-
-``````powershell
-dsh plugin --profile desktop add "<下载目录>\$assetName"
-``````
-
-也可以直接让 DSH 去取：
-
-``````powershell
-dsh plugin --profile desktop add https://github.com/$Owner/$Repository/releases/download/$tag/$assetName
-``````
-
-装完**完全退出并重新打开** DeepSeek Harness。
-
-### 校验
-
-SHA256: ``$sha256``
-
-> Windows 10/11；第三方社区插件，与 DeepSeek AI 无隶属、认可或合作关系。
-"@
+# Built line by line rather than as a here-string: a here-string terminator is
+# only recognised at a CRLF line start by Windows PowerShell, and this file may be
+# checked out with LF endings. $fence keeps the Markdown code fences out of the
+# double-quoted strings, where a backtick would be read as an escape.
+$fence = '`' * 3
+$notes = @(
+  "发布 $tag。",
+  '',
+  '### 安装',
+  '',
+  "下载附件 ``$assetName``，然后：",
+  '',
+  "$fence powershell",
+  "dsh plugin --profile desktop add `"<下载目录>\$assetName`"",
+  $fence,
+  '',
+  '也可以直接让 DSH 去取：',
+  '',
+  "$fence powershell",
+  "dsh plugin --profile desktop add https://github.com/$Owner/$Repository/releases/download/$tag/$assetName",
+  $fence,
+  '',
+  '装完**完全退出并重新打开** DeepSeek Harness。',
+  '',
+  '### 校验',
+  '',
+  "SHA256: ``$sha256``",
+  '',
+  '> Windows 10/11；第三方社区插件，与 DeepSeek AI 无隶属、认可或合作关系。'
+) -join "`n"
 
 try {
   $releases = Invoke-RestMethod -Uri "$apiBase/releases?per_page=100" -Headers $headers -Method Get
