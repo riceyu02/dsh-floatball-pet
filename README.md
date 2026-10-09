@@ -266,33 +266,6 @@ dsh-desktop-pet/
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。美术素材允许随本应用及其插件包公开分发，
 但不包含在 MIT 授权范围内，也不授权脱离本应用单独复用。
 
-## 开发：把改动同步到 GitHub
-
-改完代码后同步上去，在 VS Code 里就三步：
-
-1. `Ctrl+Shift+G` 打开左侧「源代码管理」面板，改动过的文件列在「更改」下面，点文件名可以看
-   左右对比的 diff；
-2. 在顶部输入框写一句提交说明（如 `fix: 悬浮球贴边后不再抖`），点 **✓ 提交**（或 `Ctrl+Enter`）；
-   没先暂存时它会问「是否暂存所有更改并提交」，选是就行，只想提交部分文件就先点文件名右侧的 **+**；
-3. 点状态栏左下角的 **同步更改**（`⟳`，旁边的 `1↑` 表示有 1 个待推送的提交）推送到 GitHub。
-
-命令行等价写法：
-
-```powershell
-git add -A
-git commit -m "fix: 悬浮球贴边后不再抖"
-git push
-```
-
-两点注意：
-
-- 本仓库用 `.gitattributes` 把行尾统一成 LF（`*.cmd`、`*.ps1` 例外，仍是 CRLF）。用编辑器
-  手改文件时要保持这个约定，否则一次改动会显示成整份文件的 diff。
-- CI（`.github/workflows/release.yml`）只在 **push tag**（`v*`）时触发，平时推 `main` 不会
-  跑流水线；tag 名去掉 `v` 必须与 `package.json` 的 `version` 一致，否则构建会失败。
-
----
-
 ## 更新插件时的一个坑
 
 悬浮球（以及它拉起的**焦点帮手**，那是一个 detached 的 `DSH悬浮球.exe` 进程，托盘退出不会带走它）运行时会锁住 `node_modules\dsh-desktop-pet\runtime\` 里的文件，pnpm 因此在替换时报
