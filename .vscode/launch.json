@@ -1,0 +1,37 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // F5 直接在开发模式跑悬浮球（等价 npm start）。断点打在 src/main.js 里能停，因为
+      // 调试器挂在 Electron 主进程上。
+      "name": "悬浮球（开发模式）",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron.cmd",
+      "runtimeArgs": ["."],
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "悬浮球（带 --dev）",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron.cmd",
+      "runtimeArgs": [".", "--dev"],
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      // 宿主半边（plugin/host.mjs）的单元测试：node --test test/host.test.mjs
+      "name": "测试：宿主插件",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/test/host.test.mjs",
+      "runtimeArgs": ["--test"],
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ]
+}

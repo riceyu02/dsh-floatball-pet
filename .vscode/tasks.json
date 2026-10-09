@@ -1,0 +1,27 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // 打 DSH 插件包：产出 artifacts\dsh-desktop-pet-<版本>.tgz
+      "label": "构建：DSH 插件包",
+      "type": "npm",
+      "script": "build:dsh-plugin",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "测试：全部",
+      "type": "npm",
+      "script": "test",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      // 只组装 Electron 运行时（tools/assemble.cjs），调试 runtime/ 里的问题时用
+      "label": "组装运行时",
+      "type": "npm",
+      "script": "pack",
+      "problemMatcher": []
+    }
+  ]
+}

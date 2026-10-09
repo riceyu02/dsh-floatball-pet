@@ -1,0 +1,28 @@
+{
+  // 这是个 Electron 应用 + 一个 DSH 插件包：node_modules 里有整套 Electron 运行时（342 MB），
+  // artifacts 里是打好的安装包（每个 113 MB）。排除掉它们，搜索/文件树才跟得上。
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/runtime": true,
+    "**/dist": true,
+    "**/artifacts": true,
+    "package-lock.json": true
+  },
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/runtime/**": true,
+    "**/dist/**": true,
+    "**/artifacts/**": true
+  },
+  "files.exclude": {
+    "**/runtime": true,
+    "**/dist": true,
+    "**/artifacts": true
+  },
+  // 源码里中英文注释混排，统一按 UTF-8 读；换行符交给 .gitattributes（*.cmd / *.ps1 = CRLF）。
+  "files.encoding": "utf8",
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  // 这份代码库没有构建步骤（直接跑源码），关掉不需要的提示。
+  "npm.scriptExplorerAction": "run"
+}
