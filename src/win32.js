@@ -12,9 +12,18 @@
  *
  * Writing the bit with `SetWindowPos` bypasses all of it — but it has to happen often
  * (hover changes are user-paced), and shelling out to PowerShell for every check is far
- * too slow. So this loads koffi when the profile happens to carry one (it ships with
- * dsh-orb and with DSH itself) and stays silent when it does not: the caller keeps its
- * slower PowerShell fallback either way.
+ * too slow. So this uses an in-process koffi when one is reachable, and stays silent when
+ * it is not: the caller keeps its slower PowerShell fallback either way.
+ *
+ * Where koffi comes from, in order: the copy the installer puts inside the app itself
+ * (`<app>/node_modules/koffi`, see tools/assemble.cjs), then whatever the host profile
+ * happens to carry — `dsh-orb` and `dsh-whale-widget` both ship one. The packaged copy is
+ * what makes the fast path unconditional; the profile candidates are kept only so an
+ * older install that already worked keeps working. Borrowing from another plugin is not
+ * something to rely on: measured on a tester's 0.2.19 install, both of its candidates
+ * (`<profile>/node_modules/koffi`, `<profile>/node_modules/dsh-orb/node_modules/koffi`)
+ * were absent, so the pet fell back to the 15 s PowerShell net and the full-screen
+ * game-yield check — which only runs on this fast path — never ran at all.
  *
  * Every method is a no-op when `available()` is false.
  */
@@ -26,6 +35,8 @@ const PROFILE = process.env.DSH_PROFILE_DIR
 
 /** Where a koffi build suitable for this Electron may live. Order is preference. */
 const KOFFI_CANDIDATES = [
+  // Shipped with the app. Resolved through Node, so an asar-unpacked copy is found too.
+  'koffi',
   PROFILE && path.join(PROFILE, 'node_modules', 'koffi'),
   PROFILE && path.join(PROFILE, 'node_modules', 'dsh-orb', 'node_modules', 'koffi'),
   PROFILE && path.join(PROFILE, 'node_modules', 'dsh-whale-widget', 'node_modules', 'koffi'),
@@ -66,14 +77,24 @@ function load() {
   loaded = true;
   for (const candidate of KOFFI_CANDIDATES) {
     try {
-      if (!fs.existsSync(candidate)) continue;
+      // A bare specifier goes through Node's resolution — which is what finds the app's
+      // own copy, including inside an unpacked asar — while a path is used as-is. The
+      // existence test only applies to the latter: on a bare specifier it would resolve
+      // against this file's folder and be wrong.
+      if (candidate.includes('/') || candidate.includes('\\')) {
+        if (!fs.existsSync(candidate)) continue;
+      }
       const koffi = require(candidate);
+      // Resolving is not the same as being usable: a hoisted `koffi` whose platform
+      // binary is missing still requires fine and only fails when it is loaded. Ask for
+      // a real function pointer so a half-installed candidate is rejected here, where
+      // the next candidate can still be tried.
       const user32 = koffi.load('user32.dll');
       const shell32 = koffi.load('shell32.dll');
       const kernel32 = koffi.load('kernel32.dll');
       const enumProc = koffi.proto('bool EnumWindowsProc(void *hwnd, void *param)');
       api = {
-        source: candidate,
+        source: require.resolve(candidate),
         koffi,
         getWindowLong: user32.func('long GetWindowLongA(void *h, int index)'),
         setWindowPos: user32.func('bool SetWindowPos(void *h, void *after, int x, int y, int cx, int cy, unsigned int flags)'),
@@ -101,8 +122,9 @@ function load() {
       };
       return api;
     } catch {
-      // A build for a different runtime, a missing dependency: both mean "no native
-      // path", which the caller already handles.
+      // A build for a different runtime, a missing platform binary, a profile path that
+      // belongs to somebody else: all of them just mean "try the next candidate", and
+      // when none is left, "no native path" — which the caller already handles.
     }
   }
   return null;

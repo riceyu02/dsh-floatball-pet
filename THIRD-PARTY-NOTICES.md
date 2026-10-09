@@ -16,6 +16,19 @@ software under their respective licenses.
 Every packaged runtime retains Electron's `LICENSE` file and Chromium's
 `LICENSES.chromium.html` notice file next to the executable.
 
+## koffi
+
+The packaged application carries koffi and its prebuilt Windows x64 binary, used
+for the in-process Win32 calls that keep the pet on top and let it step aside
+for games (see `src/win32.js`). Both are distributed unmodified, as dev
+dependencies of this project.
+
+- `koffi` 3.3.1 — MIT License
+- `@koromix/koffi-win32-x64` 3.3.1 — MIT License
+
+- koffi project: <https://github.com/Koromix/koffi>
+- koffi license: <https://github.com/Koromix/koffi/blob/master/LICENSE.txt>
+
 ## Artwork
 
 The following artwork is supplied by the project maintainer. The maintainer

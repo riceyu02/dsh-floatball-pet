@@ -1,7 +1,7 @@
 {
   "name": "dsh-desktop-pet",
   "productName": "DSH 悬浮球",
-  "version": "0.2.19",
+  "version": "0.2.20",
   "description": "DeepSeek Harness 桌面悬浮球桌宠及可安装 DSH 插件：悬浮球 + 灵动岛（余额 / 运行时间）+ 设置面板，点击悬浮球唤起 DSH。",
   "author": "Riceyu02",
   "license": "MIT",
@@ -71,8 +71,10 @@
     }
   },
   "devDependencies": {
+    "@koromix/koffi-win32-x64": "3.3.1",
     "electron": "^33.2.0",
     "electron-builder": "^26.15.3",
+    "koffi": "3.3.1",
     "tar": "^7.5.22"
   },
   "build": {
@@ -82,10 +84,13 @@
       "src/**/*",
       "tools/focus-agent.cjs",
       "tools/launch.cjs",
+      "node_modules/**/*",
       "package.json"
     ],
     "asarUnpack": [
-      "src/PetFocus.dll"
+      "src/PetFocus.dll",
+      "node_modules/koffi/**/*",
+      "node_modules/@koromix/**/*"
     ],
     "directories": {
       "output": "dist",
