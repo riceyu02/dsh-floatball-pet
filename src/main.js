@@ -703,6 +703,11 @@ function pushHover() {
 }
 
 function applyPointerMode(interactive) {
+  // While a game owns the screen the pet is transparent, so it must not react to the
+  // cursor at all — otherwise the hover poll keeps flipping the click-through style on an
+  // invisible window, and one of those flips is what the user sees as "the ball is stuck"
+  // when it comes back.
+  if (topmostSuppressed) return;
   if (interactive === pointerInteractive || !win || win.isDestroyed()) return;
   pointerInteractive = interactive;
   win.setIgnoreMouseEvents(!interactive, { forward: true });
@@ -1234,14 +1239,37 @@ function createWindow() {
       }).bounds;
       const full = win32.fullscreenWindow(bounds, handle);
       const verdict = judgeFullscreenWindow(full);
-      if (verdict && verdict.game && !topmostSuppressed) {
-        topmostSuppressed = true;
-        log(`hiding the pet: ${verdict.why} (class=${full.className} title="${full.title.slice(0, 60)}")`);
-        win.hide();
-      } else if ((!verdict || !verdict.game) && topmostSuppressed) {
-        topmostSuppressed = false;
-        log(`showing the pet again: ${verdict ? verdict.why : 'no full-screen window'}`);
-        win.showInactive();
+      const shouldHide = Boolean(verdict && verdict.game);
+      if (shouldHide !== topmostSuppressed) {
+        topmostSuppressed = shouldHide;
+        log(shouldHide
+          ? `hiding the pet: ${verdict.why} (class=${full.className} title="${full.title.slice(0, 60)}")`
+          : `showing the pet again: ${verdict ? verdict.why : 'no full-screen window'}`);
+      }
+      // Hidden by making the window fully transparent rather than by hiding it.
+      //
+      // `win.hide()` + `win.showInactive()` is what froze the ball when Arknights went
+      // from borderless full screen back to a window: a transparent Electron window that
+      // has been hidden does not reliably repaint on show, and a game switching display
+      // modes around it makes that worse — the ball came back but stayed frozen. With the
+      // window merely transparent it is never hidden: the compositor keeps producing
+      // frames, the renderer is never suspended, and the ball is already the right thing
+      // the moment the game stops owning the screen.
+      const wantedOpacity = topmostSuppressed ? 0 : 1;
+      if (win.getOpacity() !== wantedOpacity) {
+        // If this platform refuses window opacity, hiding is still better than nothing.
+        try {
+          if (wantedOpacity === 0) applyPointerMode(false);
+          win.setOpacity(wantedOpacity);
+          if (wantedOpacity === 1) {
+            win.webContents.invalidate();
+            reassertTopmostSoon();
+          }
+        } catch (error) {
+          log('window opacity unavailable, hiding instead:', error.message);
+          if (wantedOpacity === 0) win.hide();
+          else win.showInactive();
+        }
       }
       if (topmostSuppressed) {
         topmostGuardTimer = setTimeout(guardTick, dragging ? TOPMOST_GUARD_DRAG_MS : TOPMOST_GUARD_MS);
