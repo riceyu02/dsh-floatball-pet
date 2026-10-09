@@ -20,7 +20,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
-const REPO = 'riceyu02/dsh-desktop-pet';
+const REPO = 'riceyu02/dsh-floatball-pet';
 const API_LATEST = `https://api.github.com/repos/${REPO}/releases/latest`;
 const REQUEST_TIMEOUT_MS = 20000;
 /** Installers to keep: the installed version plus the one before it (offline rollback). */
@@ -80,7 +80,7 @@ function getJson(url) {
   return new Promise((resolve, reject) => {
     const request = net.request({ url, redirect: 'follow' });
     request.setHeader('Accept', 'application/vnd.github+json');
-    request.setHeader('User-Agent', `dsh-desktop-pet/${currentVersion()}`);
+    request.setHeader('User-Agent', `dsh-floatball-pet${currentVersion()}`);
     const timer = setTimeout(() => {
       request.abort();
       reject(new Error('请求超时（20 秒）'));
@@ -139,7 +139,7 @@ async function checkLatest() {
 function download(url, destination, onProgress) {
   return new Promise((resolve, reject) => {
     const request = net.request({ url, redirect: 'follow' });
-    request.setHeader('User-Agent', `dsh-desktop-pet/${currentVersion()}`);
+    request.setHeader('User-Agent', `dsh-floatball-pet${currentVersion()}`);
     request.on('response', (response) => {
       if (response.statusCode < 200 || response.statusCode >= 300) {
         reject(new Error(`下载失败：HTTP ${response.statusCode}`));
@@ -185,12 +185,52 @@ function download(url, destination, onProgress) {
  *     cannot resolve the bundle. So verify the result, clean up and try once more, and
  *     always record the recovery commands.
  */
+/**
+ * The names this package can be installed under. A profile installed from a `file:` or
+ * from npm uses the scoped name; the release tarballs do not, and neither do profiles
+ * installed before the scope existed. Every lookup below accepts either, or an older
+ * installation silently loses its cleanup and rollback paths.
+ */
+const PACKAGE_NAMES = ['dsh-floatball-pet', 'dsh-desktop-pet'];
+
+/** The profile manifest's spec for this package, whichever name it was installed under. */
+function selfSpec(manifest) {
+  for (const name of PACKAGE_NAMES) {
+    const spec = manifest && manifest.dependencies && manifest.dependencies[name];
+    if (typeof spec === 'string') return spec;
+  }
+  return null;
+}
+
+/** `[whole, prefix]` of a tarball of this package, for either naming scheme. */
+function tarballMatch(name) {
+  return /^((?:dsh-floatball-pet|dsh-desktop-pet))-[0-9]+\.[0-9]+\.[0-9]+\.tgz$/.exec(name);
+}
+
+function tarballIsOurs(name) {
+  return tarballMatch(name) !== null;
+}
+
+function tarballVersion(name) {
+  const match = tarballMatch(name);
+  return match === null ? null : name.slice(match[1].length + 1, -'.tgz'.length);
+}
 const APPLY_SCRIPT = [
   "'use strict';",
   "const { spawnSync } = require('node:child_process');",
   "const fs = require('node:fs');",
   "const path = require('node:path');",
   "const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));",
+  "const PACKAGE_NAMES = config.packageNames || [];",
+  "const TARBALL_NAME = /^((?:dsh-floatball-pet|dsh-desktop-pet))-[0-9]+[.][0-9]+[.][0-9]+[.]tgz$/;",
+  "/** This package's spec in the profile manifest, whichever name it was installed under. */",
+  "function specOf(manifest) {",
+  "  for (const name of PACKAGE_NAMES) {",
+  "    const spec = manifest.dependencies && manifest.dependencies[name];",
+  "    if (typeof spec === 'string') return spec;",
+  "  }",
+  "  return null;",
+  "}",
   "const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));",
   "const write = (payload) => fs.writeFileSync(config.statusPath, JSON.stringify(payload, null, 2));",
   "",
@@ -230,15 +270,17 @@ const APPLY_SCRIPT = [
   "  try {",
   "    if (!dir || !fs.existsSync(dir)) return removed;",
   "    const manifest = JSON.parse(fs.readFileSync(path.join(config.profileDir, 'package.json'), 'utf8'));",
-  "    const spec = manifest.dependencies && manifest.dependencies['dsh-desktop-pet'];",
+  "    const spec = selfSpec(manifest);",
   "    if (typeof spec !== 'string' || !spec.startsWith('file:')) return removed;",
   "    const protectedPaths = [path.resolve(config.profileDir, spec.slice('file:'.length))];",
-  "    const prefix = 'dsh-desktop-pet-';",
-  "    const names = fs.readdirSync(dir)",
-  "      .filter((name) => /^dsh-desktop-pet-[0-9]+\\.[0-9]+\\.[0-9]+\\.tgz$/.test(name))",
+  "    const names = fs.readdirSync(dir).map((name) => {",
+  "      const match = name.match(TARBALL_NAME);",
+  "      return match ? { name, version: name.slice(match[1].length + 1, -4) } : null;",
+  "    }).filter(Boolean).map((entry) => entry.name)",
   "      .sort((a, b) => {",
-  "        const left = a.slice(prefix.length, -4).split('.').map(Number);",
-  "        const right = b.slice(prefix.length, -4).split('.').map(Number);",
+  "        const match = (n) => n.match(TARBALL_NAME);",
+  "        const left = a.slice(match(a)[1].length + 1, -4).split('.').map(Number);",
+  "        const right = b.slice(match(b)[1].length + 1, -4).split('.').map(Number);",
   "        for (let i = 0; i < 3; i += 1) {",
   "          if ((left[i] || 0) !== (right[i] || 0)) return (right[i] || 0) - (left[i] || 0);",
   "        }",
@@ -251,7 +293,8 @@ const APPLY_SCRIPT = [
   "      try { fs.rmSync(full, { force: true }); removed.push(name); } catch { }",
   "    }",
   "    for (const name of fs.readdirSync(dir)) {",
-  "      if (name.startsWith(prefix) && name.endsWith('.part')) {",
+  "      const isOurs = TARBALL_NAME.test(name);",
+  "      if (isOurs && name.endsWith('.part')) {",
   "        try { fs.rmSync(path.join(dir, name), { force: true }); removed.push(name); } catch { }",
   "      }",
   "    }",
@@ -347,7 +390,7 @@ async function stageAndApply(release, dshExePath, onProgress) {
   const statusPath = path.join(userData, 'update-status.json');
   const profile = path.basename(profileDir());
   const nodeModulesDir = path.join(profileDir(), 'node_modules');
-  const packageDir = path.join(nodeModulesDir, 'dsh-desktop-pet');
+  const packageDir = path.join(nodeModulesDir, 'dsh-floatball-pet');
   fs.mkdirSync(userData, { recursive: true });
   fs.writeFileSync(configPath, JSON.stringify({
     pid: process.pid,
@@ -361,9 +404,10 @@ async function stageAndApply(release, dshExePath, onProgress) {
     tarballDir,
     profileDir: profileDir(),
     keepInstallers: KEEP_INSTALLERS,
+    packageNames: PACKAGE_NAMES,
     recovery: [
       '① 确认没有 DSH悬浮球 进程在跑（托盘退出不够，焦点帮手是独立进程）',
-      `② 删除 ${packageDir} 与 ${nodeModulesDir}\\dsh-desktop-pet_tmp_*`,
+      `② 删除 ${packageDir} 与 ${nodeModulesDir}\\dsh-floatball-pet_tmp_*`,
       `③ 重新安装：dsh plugin --profile ${profile} add "${target}"`,
     ].join('\n'),
   }, null, 2));
@@ -399,7 +443,7 @@ function installedTarball(env = process.env) {
   if (!profile) return null;
   try {
     const manifest = JSON.parse(fs.readFileSync(path.join(profile, 'package.json'), 'utf8'));
-    const spec = manifest.dependencies && manifest.dependencies['dsh-desktop-pet'];
+    const spec = selfSpec(manifest);
     if (typeof spec !== 'string' || !spec.startsWith('file:')) return null;
     return path.resolve(profile, spec.slice('file:'.length));
   } catch {
@@ -432,11 +476,11 @@ function cleanupOldTarballs({ keep = KEEP_INSTALLERS, env = process.env } = {}) 
 
   const protectedPaths = new Set([path.resolve(installedTarball(env))]);
   const ours = fs.readdirSync(directory)
-    .filter((name) => /^dsh-desktop-pet-\d+\.\d+\.\d+\.tgz$/.test(name))
+    .filter((name) => tarballIsOurs(name))
     .map((name) => ({
       name,
       full: path.join(directory, name),
-      version: name.slice('dsh-desktop-pet-'.length, -'.tgz'.length),
+      version: tarballVersion(name),
     }))
     .sort((a, b) => compareVersions(b.version, a.version)); // newest first
 
@@ -454,7 +498,7 @@ function cleanupOldTarballs({ keep = KEEP_INSTALLERS, env = process.env } = {}) 
   }
   // Half-downloaded files from an interrupted update.
   for (const name of fs.readdirSync(directory)) {
-    if (name.startsWith('dsh-desktop-pet-') && name.endsWith('.part')) {
+    if (tarballIsOurs(name) && name.endsWith('.part')) {
       try {
         fs.rmSync(path.join(directory, name), { force: true });
         removed.push(name);

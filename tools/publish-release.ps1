@@ -4,7 +4,7 @@
   [ValidateSet('Draft', 'Publish')]
   [string]$Mode = 'Draft',
   [string]$Owner = 'riceyu02',
-  [string]$Repository = 'dsh-desktop-pet'
+  [string]$Repository = 'dsh-floatball-pet'
 )
 
 <#
@@ -65,7 +65,7 @@ $headers = @{
   Accept                 = 'application/vnd.github+json'
   Authorization          = "Bearer $token"
   'X-GitHub-Api-Version' = '2022-11-28'
-  'User-Agent'           = 'dsh-desktop-pet-release-helper'
+  'User-Agent'           = 'dsh-floatball-pet-release-helper'
 }
 
 # Built line by line rather than as a here-string: a here-string terminator is
@@ -145,7 +145,7 @@ try {
         if (-not (Test-Path -LiteralPath $curl)) { $curl = 'curl.exe' }
         $responseFile = Join-Path $env:TEMP "dsh-pet-upload-$([guid]::NewGuid().ToString('N')).json"
         & $curl -sS -X POST -H "Authorization: Bearer $token" -H 'Content-Type: application/gzip' `
-          -H 'User-Agent: dsh-desktop-pet-release-helper' -H 'Accept: application/vnd.github+json' `
+          -H 'User-Agent: dsh-floatball-pet-release-helper' -H 'Accept: application/vnd.github+json' `
           --data-binary "@$assetPath" $uploadUri -o $responseFile
         if ($LASTEXITCODE -ne 0) { throw "curl upload failed with exit code $LASTEXITCODE" }
         $asset = Get-Content -LiteralPath $responseFile -Raw -Encoding UTF8 | ConvertFrom-Json

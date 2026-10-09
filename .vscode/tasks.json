@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      // 打 DSH 插件包：产出 artifacts\dsh-desktop-pet-<版本>.tgz
+      // 打 DSH 插件包：产出 artifacts\dsh-floatball-pet-<版本>.tgz
       "label": "构建：DSH 插件包",
       "type": "npm",
       "script": "build:dsh-plugin",

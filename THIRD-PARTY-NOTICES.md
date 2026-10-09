@@ -1,7 +1,7 @@
 # Third-Party Notices
 
 This file covers third-party components and assets distributed with
-`dsh-desktop-pet`. The project license in `LICENSE` applies to the project's
+`dsh-floatball-pet`. The project license in `LICENSE` applies to the project's
 original source code unless a section below says otherwise.
 
 ## Electron and Chromium

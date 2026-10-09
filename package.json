@@ -1,17 +1,17 @@
 {
-  "name": "dsh-desktop-pet",
+  "name": "dsh-floatball-pet",
   "productName": "DSH 悬浮球",
-  "version": "0.2.20",
+  "version": "0.2.21",
   "description": "DeepSeek Harness 桌面悬浮球桌宠及可安装 DSH 插件：悬浮球 + 灵动岛（余额 / 运行时间）+ 设置面板，点击悬浮球唤起 DSH。",
   "author": "Riceyu02",
   "license": "MIT",
-  "homepage": "https://github.com/riceyu02/dsh-desktop-pet#readme",
+  "homepage": "https://github.com/riceyu02/dsh-floatball-pet#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/riceyu02/dsh-desktop-pet.git"
+    "url": "git+https://github.com/riceyu02/dsh-floatball-pet.git"
   },
   "bugs": {
-    "url": "https://github.com/riceyu02/dsh-desktop-pet/issues"
+    "url": "https://github.com/riceyu02/dsh-floatball-pet/issues"
   },
   "keywords": [
     "dsh",
@@ -41,8 +41,17 @@
   "files": [
     "plugin",
     "client.js",
-    "runtime",
     "cordis.patch.yml",
+    "tools/prepare-install.cjs",
+    "tools/assemble.cjs",
+    "tools/build-focus-dll.cjs",
+    "tools/focus-agent.cjs",
+    "tools/launch.cjs",
+    "src",
+    "build/PetFocus.dll",
+    "build/icon.ico",
+    "node_modules/koffi",
+    "node_modules/@koromix/koffi-win32-x64",
     "README.md",
     "LICENSE",
     "THIRD-PARTY-NOTICES.md"
@@ -51,6 +60,14 @@
     "node": ">=22",
     "dsh": ">=0.1.7-rc.2 <0.3.0-0"
   },
+  "dependencies": {
+    "@koromix/koffi-win32-x64": "3.3.1",
+    "koffi": "3.3.1"
+  },
+  "bundledDependencies": [
+    "@koromix/koffi-win32-x64",
+    "koffi"
+  ],
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.4"
   },
@@ -71,10 +88,8 @@
     }
   },
   "devDependencies": {
-    "@koromix/koffi-win32-x64": "3.3.1",
     "electron": "^33.2.0",
     "electron-builder": "^26.15.3",
-    "koffi": "3.3.1",
     "tar": "^7.5.22"
   },
   "build": {

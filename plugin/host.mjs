@@ -13,11 +13,39 @@ export const inject = ['webServer']
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const EXECUTABLE_NAME = 'DSH悬浮球.exe'
-const REPO = 'riceyu02/dsh-desktop-pet'
+const REPO = 'riceyu02/dsh-floatball-pet'
 const API_LATEST = `https://api.github.com/repos/${REPO}/releases/latest`
 const ROUTE_PREFIX = '/.dsh-desktop-pet'
 /** Installers to keep: the installed one plus the previous (offline rollback). */
 const KEEP_INSTALLERS = 2
+
+/**
+ * The names this package can be installed under. A profile installed from a `file:` tarball
+ * or from npm uses the scoped name; the release tarballs do not, and neither do profiles
+ * installed before the scope existed. Every lookup that reads the profile manifest has to
+ * accept either, or an older installation silently stops having its old installers cleaned
+ * up. `tools/prepare-install.cjs` keeps the same list for the same reason.
+ */
+const PACKAGE_NAMES = ['dsh-floatball-pet', 'dsh-desktop-pet']
+
+/** The profile manifest's spec for this package, whichever name it was installed under. */
+export function selfSpec(manifest) {
+  for (const name of PACKAGE_NAMES) {
+    const spec = manifest && manifest.dependencies && manifest.dependencies[name]
+    if (typeof spec === 'string') return spec
+  }
+  return null
+}
+
+/** `[whole, prefix]` of a release tarball of this package, for either naming scheme. */
+function tarballMatch(name) {
+  return /^((?:dsh-floatball-pet|dsh-desktop-pet))-[0-9]+\.[0-9]+\.[0-9]+\.tgz$/.exec(name)
+}
+
+export function tarballVersion(name) {
+  const match = tarballMatch(name)
+  return match === null ? null : name.slice(match[1].length + 1, -'.tgz'.length)
+}
 
 function report(ctx, level, message) {
   try {
@@ -43,15 +71,65 @@ export function resolveDshHome(profileDir, env = process.env) {
 }
 
 /**
- * A packed plugin keeps the Electron helper in `runtime/`.  The second path is
- * intentionally retained for `dsh plugin add link:<checkout>` development.
+ * Where installs cache the assembled runtime: `<DSH_HOME>/dsh-desktop-pet/runtime/<electron
+ * version>`. It lives outside the package on purpose — `node_modules/dsh-floatball-pet` is
+ * deleted and recreated on every plugin upgrade, so a runtime kept inside it would be
+ * rebuilt each time (and its file locks are what make pnpm report `ERR_PNPM_EPERM ...
+ * runtime` while the ball is running). Keyed by Electron version alone, so upgrading the
+ * plugin reuses it and only a new Electron release needs a new download.
+ *
+ * The directory keeps the old product name on purpose: renaming it would make every
+ * installed profile download 269 MB again and lose its ball size, position and opacity.
  */
-export function resolveRuntime(packageRoot = PACKAGE_ROOT, env = process.env) {
+export function cachedRuntimeRoot(profileDir = process.cwd(), env = process.env) {
+  if (env.DSH_PET_RUNTIME_DIR) return path.resolve(env.DSH_PET_RUNTIME_DIR)
+  return path.join(resolveDshHome(profileDir, env), 'dsh-desktop-pet', 'runtime')
+}
+
+/**
+ * The executable inside a runtime directory built by `tools/prepare-install.cjs`. The
+ * `.ready.json` marker is written last, so a directory without one is an interrupted
+ * assembly and is refused rather than used.
+ */
+function preparedRuntime(root) {
+  let entries
+  try {
+    entries = readdirSync(root, { withFileTypes: true })
+  } catch {
+    return null
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const dir = path.join(root, entry.name)
+    if (!existsSync(path.join(dir, '.ready.json'))) continue
+    const executable = [EXECUTABLE_NAME, 'electron.exe']
+      .map(name => path.join(dir, name))
+      .find(candidate => existsSync(candidate))
+    if (executable !== undefined) return executable
+  }
+  return null
+}
+
+/**
+ * Where the Electron helper lives, most specific first:
+ *
+ * 1. `DSH_PET_RUNTIME_EXE` — an explicit override, for tests and troubleshooting.
+ * 2. `runtime/` inside the package — what the all-in-one tarball ships, so an install
+ *    that already carries a runtime keeps using it and never touches the cache.
+ * 3. `dist/DSH悬浮球` — a source checkout assembled by `npm run pack`.
+ * 4. the version-keyed cache from `tools/prepare-install.cjs` — what a published,
+ *    runtime-less install relies on, and what makes an upgrade download nothing.
+ *
+ * Package-local paths stay ahead of the cache on purpose: an existing installation must
+ * behave exactly as it did before the cache existed.
+ */
+export function resolveRuntime(packageRoot = PACKAGE_ROOT, env = process.env, profileDir) {
   const candidates = [
     env.DSH_PET_RUNTIME_EXE,
     path.join(packageRoot, 'runtime', EXECUTABLE_NAME),
     path.join(packageRoot, 'runtime', 'electron.exe'),
     path.join(packageRoot, 'dist', 'DSH悬浮球', EXECUTABLE_NAME),
+    preparedRuntime(cachedRuntimeRoot(profileDir ?? packageRoot, env)),
   ].filter(Boolean)
   return candidates.find(candidate => existsSync(candidate)) ?? null
 }
@@ -223,7 +301,7 @@ async function fetchJson(url, timeoutMs = 20000) {
   const viaElectron = await electronRequest(url, { json: true, timeoutMs })
   if (viaElectron !== undefined) return viaElectron
   const response = await fetch(url, {
-    headers: { Accept: 'application/vnd.github+json', 'User-Agent': `dsh-desktop-pet/${installedVersion()}` },
+    headers: { Accept: 'application/vnd.github+json', 'User-Agent': `dsh-floatball-pet${installedVersion()}` },
     signal: AbortSignal.timeout(timeoutMs),
   })
   if (!response.ok) throw new Error(`GitHub 返回 HTTP ${response.status}`)
@@ -241,7 +319,7 @@ async function electronRequest(url, { json = false, timeoutMs = 20000 } = {}) {
   if (!net || typeof net.request !== 'function') return undefined
   return await new Promise((resolve, reject) => {
     const request = net.request({ url, redirect: 'follow' })
-    request.setHeader('User-Agent', `dsh-desktop-pet/${installedVersion()}`)
+    request.setHeader('User-Agent', `dsh-floatball-pet${installedVersion()}`)
     if (json) request.setHeader('Accept', 'application/vnd.github+json')
     const timer = setTimeout(() => {
       request.abort()
@@ -313,13 +391,13 @@ export function cleanupOldInstallers(profileDir, justInstalled = null) {
   const removed = []
   try {
     const manifest = JSON.parse(readFileSync(path.join(profileDir, 'package.json'), 'utf8'))
-    const spec = manifest.dependencies && manifest.dependencies['dsh-desktop-pet']
+    const spec = selfSpec(manifest)
     if (typeof spec !== 'string' || !spec.startsWith('file:')) return removed
     const keep = new Set([path.resolve(profileDir, spec.slice('file:'.length))])
     if (justInstalled) keep.add(path.resolve(justInstalled))
     const names = readdirSync(directory)
-      .filter((entry) => /^dsh-desktop-pet-\d+\.\d+\.\d+\.tgz$/.test(entry))
-      .sort((a, b) => compareVersions(b.slice('dsh-desktop-pet-'.length, -'.tgz'.length), a.slice('dsh-desktop-pet-'.length, -'.tgz'.length)))
+      .filter((entry) => tarballMatch(entry) !== null)
+      .sort((a, b) => compareVersions(tarballVersion(b), tarballVersion(a)))
     for (const name of names.slice(0, KEEP_INSTALLERS)) keep.add(path.resolve(directory, name))
     for (const name of names) {
       const full = path.resolve(directory, name)
@@ -512,7 +590,7 @@ export function apply(ctx, config = {}) {
       || process.cwd(),
   )
   const userDataDir = path.resolve(config.userDataDir || path.join(profileDir, 'data', 'dsh-desktop-pet'))
-  const runtimePath = config.runtimePath || resolveRuntime()
+  const runtimePath = config.runtimePath || resolveRuntime(PACKAGE_ROOT, process.env, profileDir)
   const supervisor = new PetSupervisor({
     runtimePath,
     profileDir,

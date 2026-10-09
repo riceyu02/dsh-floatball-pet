@@ -9,6 +9,8 @@ import {
   helperEnvironment,
   resolveDshHome,
   resolveRuntime,
+  selfSpec,
+  tarballVersion,
 } from '../plugin/host.mjs'
 
 test('derives DSH home and marks the helper as plugin-managed', () => {
@@ -16,7 +18,7 @@ test('derives DSH home and marks the helper as plugin-managed', () => {
   assert.equal(resolveDshHome(profile, {}), path.join('D:\\', '.dsh'))
   const env = helperEnvironment({
     profileDir: profile,
-    userDataDir: path.join(profile, 'data', 'dsh-desktop-pet'),
+    userDataDir: path.join(profile, 'data', 'dsh-floatball-pet'),
     hostPid: 123,
     noSandbox: true,
   }, {})
@@ -32,7 +34,7 @@ test('strips the Electron-as-Node switch inherited from the DSH host', () => {
   const profile = path.join('D:\\', '.dsh', 'profiles', 'desktop')
   const env = helperEnvironment({
     profileDir: profile,
-    userDataDir: path.join(profile, 'data', 'dsh-desktop-pet'),
+    userDataDir: path.join(profile, 'data', 'dsh-floatball-pet'),
     hostPid: 123,
   }, { ELECTRON_RUN_AS_NODE: '1', ELECTRON_NO_ATTACH_CONSOLE: '1', PATH: 'inherited' })
   assert.equal(env.ELECTRON_RUN_AS_NODE, undefined)
@@ -55,6 +57,58 @@ test('resolves both packed and source-checkout runtimes', () => {
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
+})
+
+test('resolves the version-keyed runtime cache written by prepare-install', () => {
+  // `DSH_PET_RUNTIME_DIR` is the installer's override for the same directory. It is how
+  // an upgrade finds a runtime assembled by an earlier version: nothing is downloaded
+  // and nothing is assembled when the cache already holds the Electron version.
+  const root = mkdtempSync(path.join(tmpdir(), 'dsh-pet-cache-'))
+  try {
+    const cache = path.join(root, 'runtime')
+    const versioned = path.join(cache, '33.4.11')
+    mkdirSync(versioned, { recursive: true })
+    const executable = path.join(versioned, 'DSH悬浮球.exe')
+    writeFileSync(executable, '')
+    const env = { DSH_PET_RUNTIME_DIR: cache }
+
+    // Without the marker the directory is an interrupted assembly, not a runtime.
+    assert.equal(resolveRuntime(root, env), null)
+
+    writeFileSync(path.join(versioned, '.ready.json'), JSON.stringify({ electronVersion: '33.4.11' }))
+    assert.equal(resolveRuntime(root, env), executable)
+
+    // A runtime shipped inside the package still wins, so an install that carries one
+    // never switches over to the cache.
+    const packed = path.join(root, 'runtime', 'DSH悬浮球.exe')
+    mkdirSync(path.dirname(packed), { recursive: true })
+    writeFileSync(packed, '')
+    assert.equal(resolveRuntime(root, env), packed)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('accepts both the scoped and the unprefixed name a profile may use', () => {
+  // npm installs use `dsh-floatball-pet`; the release tarballs are named without the
+  // The project was renamed to `dsh-floatball-pet`; profiles installed under the old name
+  // are still written that way. Both have to resolve, or an upgraded installation silently
+  // loses the lookups that clean up old installers — that is what breaks when only one name
+  // is accepted.
+  assert.equal(selfSpec({ dependencies: { 'dsh-floatball-pet': 'file:a.tgz' } }), 'file:a.tgz')
+  assert.equal(selfSpec({ dependencies: { 'dsh-desktop-pet': 'file:b.tgz' } }), 'file:b.tgz')
+  assert.equal(selfSpec({ dependencies: { other: 'x' } }), null)
+  assert.equal(selfSpec({}), null)
+
+  // The release tarball name, under either name.
+  assert.equal(tarballVersion('dsh-floatball-pet-0.2.21.tgz'), '0.2.21')
+  assert.equal(tarballVersion('dsh-desktop-pet-0.2.21.tgz'), '0.2.21')
+  assert.equal(tarballVersion('dsh-desktop-pet-0.2.20.tgz'), '0.2.20')
+  assert.equal(tarballVersion('dsh-floatball-pet-1.10.3.tgz'), '1.10.3')
+  // Anything that is not one of ours has no version at all.
+  assert.equal(tarballVersion('dsh-orb-0.1.4.tgz'), null)
+  assert.equal(tarballVersion('not-dsh-floatball-pet-1.0.0.tgz'), null)
+  assert.equal(tarballVersion('dsh-floatball-pet-0.2.21.tgz.part'), null)
 })
 
 test('supervisor starts, retries an early sandbox failure, and stops the helper', async () => {

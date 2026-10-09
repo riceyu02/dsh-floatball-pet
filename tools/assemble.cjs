@@ -16,7 +16,14 @@ const { createRequire } = require('module');
 
 // Repo root, derived from this file so a fresh clone works from any path.
 const ROOT = path.resolve(__dirname, '..');
-const RUNTIME = path.join(ROOT, 'node_modules', 'electron', 'dist');
+// Electron's own distribution. `DSH_PET_ELECTRON_DIST` points this at a verified
+// extraction elsewhere — which is how an install with no usable
+// `node_modules/electron/dist` (a published tarball, where that dependency's download
+// was blocked or skipped) assembles the same runtime from the release zip that
+// `prepare-install.cjs` fetched and checksum-verified.
+const RUNTIME = process.env.DSH_PET_ELECTRON_DIST
+  ? path.resolve(process.env.DSH_PET_ELECTRON_DIST)
+  : path.join(ROOT, 'node_modules', 'electron', 'dist');
 // The DSH bundle builder points this at a temporary directory.  Apart from
 // avoiding a second 500 MB checkout copy, that also lets it build while an old
 // standalone output has restrictive Windows ACLs or is currently in use.

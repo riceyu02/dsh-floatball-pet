@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-  id: 'dsh-desktop-pet',
+  id: 'dsh-floatball-pet',
   factory: (require) => {
     const module = { exports: {} }
     const exports = module.exports
@@ -266,7 +266,7 @@ window.__ModuleLoader__.load({
 .dsh-pet-set-note { margin: 8px 0 0; font-size: 12px; opacity: 0.75; line-height: 1.5; }
 .dsh-pet-set-empty { font-size: 12px; opacity: 0.6; }
 `
-    const STYLE_ID = 'dsh-desktop-pet-settings-style'
+    const STYLE_ID = 'dsh-floatball-pet-settings-style'
 
     const inject = ['slots']
 
@@ -279,7 +279,7 @@ window.__ModuleLoader__.load({
       }
       ctx.slots.inject('settings.section', () => ctx.slots.register({
         name: 'settings.section',
-        id: 'dsh-desktop-pet',
+        id: 'dsh-floatball-pet',
         order: 26,
         label: () => copy.nav,
         inject: () => ({}),

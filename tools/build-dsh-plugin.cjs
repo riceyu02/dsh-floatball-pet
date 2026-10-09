@@ -7,7 +7,7 @@ const path = require('path');
 const tar = require('tar');
 
 const ROOT = path.resolve(__dirname, '..');
-const TEMP_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-desktop-pet-build-'));
+const TEMP_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-floatball-pet-build-'));
 const STAGE = path.join(TEMP_ROOT, 'package');
 const RUNTIME = path.join(STAGE, 'runtime');
 const ARTIFACTS = path.join(ROOT, 'artifacts');
