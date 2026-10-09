@@ -59,39 +59,95 @@ DeepSeek Harness 窗口**。
 
 ## 安装：作为 DSH 插件
 
-需要 Windows 10/11 与已安装的 DeepSeek Harness。下面命令里的 `dsh` 指桌面版自带的 CLI：
+需要 Windows 10/11 与已安装的 DeepSeek Harness。下面命令里的 `dsh` 指桌面版自带的 CLI，它在：
 
 ```text
 <DSH 安装目录>\resources\runtime\cli\bin\dsh.cmd
 ```
 
-**想给别人装？**三条路的代价差得很多，按省事程度排：
+它默认**不在 PATH 上**，所以先挑一种叫法（下文统一写成 `dsh`，你替换成自己选的那种）：
 
-| 方式 | 对方需要 | 代价 |
+```powershell
+# 1) 已经把它加进了 PATH，直接用
+dsh plugin --profile desktop add <参数>
+
+# 2) 用完整路径调用（把 <DSH 安装目录> 换成真实目录，例如 D:\DeepSeekHarness）
+& "<DSH 安装目录>\resources\runtime\cli\bin\dsh.cmd" plugin --profile desktop add <参数>
+
+# 3) 或先切到它所在目录，再用相对路径
+cd "<DSH 安装目录>\resources\runtime\cli\bin"
+.\dsh.cmd plugin --profile desktop add <参数>
+```
+
+`--profile desktop` 是桌面版实际使用的 profile 名，**不要改**。
+
+装法一共四条，代价差得很多，按省事程度排：
+
+| 方式 | 需要什么 | 代价 |
 |---|---|---|
-| 直接把 `dsh-desktop-pet-0.2.19.tgz` 发给他，用**本地路径**装 | 只要能收到文件 | 113 MB，装完即用，不联网、不构建、不放行 |
-| **方式一**（Release 地址） | 能连 `github.com` | 113 MB 下载 |
-| **方式二**（仓库地址） | 能连 `github.com`、`git` 在 PATH、放行构建脚本、能下 Electron | ~600 MB、几分钟，且换 commit 要再放行一次 |
+| **方式零**（用本地 tgz，最适合发给别人） | 只要能收到 `dsh-desktop-pet-0.2.19.tgz` 这个文件 | 113 MB 的包，装完即用：不构建、不下载 Electron、不需要放行构建脚本 |
+| **方式一**（Release 下载地址，推荐） | 能连 `github.com` | 下载 113 MB |
+| **方式二**（git 仓库地址） | 能连 `github.com`、`git` 在 PATH、放行构建脚本 | 113 MB 的包 + 解压后约 269 MB 的 Electron 运行时，几分钟；换 commit 要重新放行一次 |
+| **方式三**（自己构建） | Node.js 22+，能连 `github.com` 与 npm 源 | `npm install` 之后自己跑一条打包命令，产出本地 tgz；不需要放行构建脚本，适合想改代码的人 |
 
-所以「发给别人」这件事本身，本地路径那条最稳；仓库那条更适合想跟源码、或拿不到 Release 资产的人。
+**要发给别人，用方式零**——不依赖对方能否连 GitHub、也不用等他构建，最不容易中途卡住。方式二更适合想跟源码、或拿不到 Release 资产的人。
+
+> 下面的小节顺序是「方式一 → 方式零 → 方式二 → 方式三」：方式一和方式零用的是同一个包、同一条命令，只是包从哪来不同，所以放在一起讲。
 
 ### 方式一：装 Release 里的安装包（推荐，不需要编译）
 
-1. 到 [Releases](https://github.com/riceyu02/dsh-desktop-pet/releases) 下载
-   `dsh-desktop-pet-0.2.19.tgz`（约 113 MB，内含完整 Electron 运行时，装完无需联网再下载）。
-2. 安装进桌面版实际使用的 `desktop` profile：
+**第一步：拿到这个文件。** 两种途径，任选其一。
 
-   ```powershell
-   dsh plugin --profile desktop add "$env:USERPROFILE\Downloads\dsh-desktop-pet-0.2.19.tgz"
-   ```
+浏览器下载：打开 [Releases](https://github.com/riceyu02/dsh-desktop-pet/releases) 页面，
+在 `v0.2.19` 那一条下面点 `dsh-desktop-pet-0.2.19.tgz`（113.3 MB）。
 
-   也可以直接给下载地址，让 DSH 自己去取：
+命令行下载（省得点）：
 
-   ```powershell
-   dsh plugin --profile desktop add https://github.com/riceyu02/dsh-desktop-pet/releases/download/v0.2.19/dsh-desktop-pet-0.2.19.tgz
-   ```
+```powershell
+curl.exe -L -o "$env:USERPROFILE\Downloads\dsh-desktop-pet-0.2.19.tgz" `
+  https://github.com/riceyu02/dsh-desktop-pet/releases/download/v0.2.19/dsh-desktop-pet-0.2.19.tgz
+```
 
-3. **完全退出并重新打开 DSH**，悬浮球就会出现。
+> **`curl.exe` 不会自动走系统代理**：代理只配在浏览器里的话，这条会变成直连 `github.com`，
+> 实测能连上但慢到几 KB/s。有代理就显式加上（端口按自己的代理软件改）：
+>
+> ```powershell
+> curl.exe -L --proxy http://127.0.0.1:7897 -o "$env:USERPROFILE\Downloads\dsh-desktop-pet-0.2.19.tgz" `
+>   https://github.com/riceyu02/dsh-desktop-pet/releases/download/v0.2.19/dsh-desktop-pet-0.2.19.tgz
+> ```
+>
+> 不想折腾命令行就走浏览器下载那条。
+
+**第二步：用本地路径装它。**
+
+```powershell
+dsh plugin --profile desktop add "$env:USERPROFILE\Downloads\dsh-desktop-pet-0.2.19.tgz"
+```
+
+**第三步：完全退出并重新打开 DSH**，悬浮球就会出现。
+
+> 也可以跳过第一步，直接把地址交给 DSH 去取：
+>
+> ```powershell
+> dsh plugin --profile desktop add https://github.com/riceyu02/dsh-desktop-pet/releases/download/v0.2.19/dsh-desktop-pet-0.2.19.tgz
+> ```
+>
+> 但下载是 **DSH 自己在做**，走的是命令行网络：如果这台机器只有浏览器能连 GitHub（代理只配在
+> 浏览器里），这条会卡住或报错，那就换回本地路径那条。**别用会被清理的目录**——`file:` 依赖会记住
+> 路径，之后文件没了，升级或重装时就取不到源。
+
+### 方式零：用本地 tgz 装（最适合发给别人，也最稳）
+
+和方式一的第二步是同一条命令，区别只在于**包从哪来**：对方收你的微信/网盘/邮件附件，而不是自己去下。
+包名固定是 `dsh-desktop-pet-<版本>.tgz`，当前发布版是 `dsh-desktop-pet-0.2.19.tgz`。
+
+```powershell
+dsh plugin --profile desktop add "<放 tgz 的目录>\dsh-desktop-pet-0.2.19.tgz"
+```
+
+体积约 113 MB。**把这个文件放在一个不会被清理的地方**：本地路径装出来的依赖会记住这个位置
+（profile 的 `package.json` 里写着 `file:` 加该路径），日后升级或在插件页重装时还要回来找它；
+放在临时目录里、或装完就删掉，之后就取不到源了。路径也**建议全英文**（原因见「独立运行」一节）。
 
 ### 方式二：直接用 GitHub 仓库安装（不需要 Release）
 
@@ -106,7 +162,8 @@ dsh plugin --profile desktop add git+https://github.com/riceyu02/dsh-desktop-pet
 **建议钉一个 tag（如上面的 `#v0.2.19`），不要跟着 `main` 走。** 原因见下：放行的键里带着 commit，
 跟 `main` 意味着插件每更新一次，装的人就要重新放行一次；钉 tag 则一个版本只需放行一次。
 
-这条路径不下载预编译包，而是在你机器上现装依赖、现组装 Electron 运行时（约 500 MB，几分钟）。
+这条路径不下载预编译包，而是在你机器上现装依赖、现组装 Electron 运行时——实测装完 `runtime\`
+目录占 269 MB（tgz 里已经装好的那一份解压出来也是这个数），加上下载和解压，要几分钟。
 第一次跑通常会在**构建脚本**这一步停下：pnpm 11 默认拦截依赖的构建脚本，并把它要求的那一行
 原样打印出来，例如
 
@@ -122,13 +179,22 @@ allowBuilds:
 
 ### 方式三：自己构建
 
+用 Node.js 22 或更高版本（`package.json` 的 `engines` 要求 `>=22`）：
+
 ```powershell
 git clone https://github.com/riceyu02/dsh-desktop-pet.git
 cd dsh-desktop-pet
-npm install                      # 若 Electron 下载慢，先设镜像，见「常见问题」
-npm run build:dsh-plugin         # 产出 artifacts\dsh-desktop-pet-0.2.19.tgz
+npm install                      # 若 Electron 下载太慢，先设镜像，见「常见问题」
+npm run build:dsh-plugin         # 产出 artifacts\dsh-desktop-pet-<版本>.tgz
 dsh plugin --profile desktop add "$PWD\artifacts\dsh-desktop-pet-0.2.19.tgz"
 ```
+
+`npm install` 时 `prepare` 钩子**会跳过运行时组装**——它认得出这是工作副本（有 `.git`），
+组装只在你显式执行 `npm run pack`（独立程序用）或 `npm run build:dsh-plugin`（插件安装包用）
+时才做，所以不会白等，也不会重复下载 Electron。
+
+这条路**不需要等 pnpm 来拦构建脚本**：你是自己跑 `npm run build:dsh-plugin` 把包造出来的，
+最后那一步 `add` 喂给 DSH 的是一个已经造好的本地 tgz，走的就是方式零那条路。
 
 ### 让 DSH 的 AI 帮你装（把下面这段发给它就行）
 
