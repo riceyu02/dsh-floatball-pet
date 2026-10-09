@@ -101,14 +101,14 @@ test('accepts both the scoped and the unprefixed name a profile may use', () => 
   assert.equal(selfSpec({}), null)
 
   // The release tarball name, under either name.
-  assert.equal(tarballVersion('dsh-floatball-pet-0.2.21.tgz'), '0.2.21')
-  assert.equal(tarballVersion('dsh-desktop-pet-0.2.21.tgz'), '0.2.21')
+  assert.equal(tarballVersion('dsh-floatball-pet-0.1.0.tgz'), '0.1.0')
+  assert.equal(tarballVersion('dsh-desktop-pet-0.1.0.tgz'), '0.1.0')
   assert.equal(tarballVersion('dsh-desktop-pet-0.2.20.tgz'), '0.2.20')
   assert.equal(tarballVersion('dsh-floatball-pet-1.10.3.tgz'), '1.10.3')
   // Anything that is not one of ours has no version at all.
   assert.equal(tarballVersion('dsh-orb-0.1.4.tgz'), null)
   assert.equal(tarballVersion('not-dsh-floatball-pet-1.0.0.tgz'), null)
-  assert.equal(tarballVersion('dsh-floatball-pet-0.2.21.tgz.part'), null)
+  assert.equal(tarballVersion('dsh-floatball-pet-0.1.0.tgz.part'), null)
 })
 
 test('supervisor starts, retries an early sandbox failure, and stops the helper', async () => {

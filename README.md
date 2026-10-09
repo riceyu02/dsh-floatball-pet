@@ -86,12 +86,12 @@ cd "<DSH 安装目录>\resources\runtime\cli\bin"
 | 方式 | 需要什么 | 代价 |
 |---|---|---|
 | **方式四**（从 npm 装，插件页一键） | 能连 npm 源（国内选「中国大陆镜像源」） | 2.2 MB 的包，装时**另下约 110 MB 的 Electron**；**唯一能在插件页里一键装的方式** |
-| **方式零**（用本地 Release 包，最适合发给别人） | 只要能收到 `dsh-floatball-pet-0.2.21.tgz` 这个文件 | 约 114.5 MB 的包（内含运行时），装完即用：不构建、**不下载 Electron**、不需要放行构建脚本 |
+| **方式零**（用本地 Release 包，最适合发给别人） | 只要能收到 `dsh-floatball-pet-0.1.0.tgz` 这个文件 | 约 114.5 MB 的包（内含运行时），装完即用：不构建、**不下载 Electron**、不需要放行构建脚本 |
 | **方式一**（Release 下载地址，推荐） | 能连 `github.com` | 下载 114.5 MB |
 | **方式二**（git 仓库地址） | 能连 `github.com`、`git` 在 PATH、放行构建脚本 | 包里只有代码（约 2 MB），装的时候**另下约 110 MB 的 Electron**；换 commit 要重新放行一次 |
 | **方式三**（自己构建） | Node.js 22+，能连 `github.com` 与 npm 源 | `npm install` 之后自己跑一条打包命令；不需要放行构建脚本，适合想改代码的人 |
 
-两个包的体积差在哪：**0.2.21 起，从源码构建出来的包不含 Electron**（`runtime/` 占了旧包的
+两个包的体积差在哪：**0.1.0 起，从源码构建出来的包不含 Electron**（`runtime/` 占了旧包的
 100%），改为安装时按需下载并缓存；而 Release 里那份是特意打进包的，给**装完即用、甚至离线**的场景。
 两条路的运行时位置、下载时机和缓存规则见文末「运行时放在哪、什么时候下载」一节。
 
@@ -104,21 +104,21 @@ cd "<DSH 安装目录>\resources\runtime\cli\bin"
 **第一步：拿到这个文件。** 两种途径，任选其一。
 
 浏览器下载：打开 [Releases](https://github.com/riceyu02/dsh-floatball-pet/releases) 页面，
-在 `v0.2.21` 那一条下面点 `dsh-floatball-pet-0.2.21.tgz`（约 114.5 MB）。
+在 `v0.1.0` 那一条下面点 `dsh-floatball-pet-0.1.0.tgz`（约 114.5 MB）。
 
 命令行下载（省得点）：
 
 ```powershell
-curl.exe -L -o "$env:USERPROFILE\Downloads\dsh-floatball-pet-0.2.21.tgz" `
-  https://github.com/riceyu02/dsh-floatball-pet/releases/download/v0.2.21/dsh-floatball-pet-0.2.21.tgz
+curl.exe -L -o "$env:USERPROFILE\Downloads\dsh-floatball-pet-0.1.0.tgz" `
+  https://github.com/riceyu02/dsh-floatball-pet/releases/download/v0.1.0/dsh-floatball-pet-0.1.0.tgz
 ```
 
 > **`curl.exe` 不会自动走系统代理**：代理只配在浏览器里的话，这条会变成直连 `github.com`，
 > 实测能连上但慢到几 KB/s。有代理就显式加上（端口按自己的代理软件改）：
 >
 > ```powershell
-> curl.exe -L --proxy http://127.0.0.1:7897 -o "$env:USERPROFILE\Downloads\dsh-floatball-pet-0.2.21.tgz" `
->   https://github.com/riceyu02/dsh-floatball-pet/releases/download/v0.2.21/dsh-floatball-pet-0.2.21.tgz
+> curl.exe -L --proxy http://127.0.0.1:7897 -o "$env:USERPROFILE\Downloads\dsh-floatball-pet-0.1.0.tgz" `
+>   https://github.com/riceyu02/dsh-floatball-pet/releases/download/v0.1.0/dsh-floatball-pet-0.1.0.tgz
 > ```
 >
 > 不想折腾命令行就走浏览器下载那条。
@@ -126,7 +126,7 @@ curl.exe -L -o "$env:USERPROFILE\Downloads\dsh-floatball-pet-0.2.21.tgz" `
 **第二步：用本地路径装它。**
 
 ```powershell
-dsh plugin --profile desktop add "$env:USERPROFILE\Downloads\dsh-floatball-pet-0.2.21.tgz"
+dsh plugin --profile desktop add "$env:USERPROFILE\Downloads\dsh-floatball-pet-0.1.0.tgz"
 ```
 
 **第三步：完全退出并重新打开 DSH**，悬浮球就会出现。
@@ -134,7 +134,7 @@ dsh plugin --profile desktop add "$env:USERPROFILE\Downloads\dsh-floatball-pet-0
 > 也可以跳过第一步，直接把地址交给 DSH 去取：
 >
 > ```powershell
-> dsh plugin --profile desktop add https://github.com/riceyu02/dsh-floatball-pet/releases/download/v0.2.21/dsh-floatball-pet-0.2.21.tgz
+> dsh plugin --profile desktop add https://github.com/riceyu02/dsh-floatball-pet/releases/download/v0.1.0/dsh-floatball-pet-0.1.0.tgz
 > ```
 >
 > 但下载是 **DSH 自己在做**，走的是命令行网络：如果这台机器只有浏览器能连 GitHub（代理只配在
@@ -144,10 +144,10 @@ dsh plugin --profile desktop add "$env:USERPROFILE\Downloads\dsh-floatball-pet-0
 ### 方式零：用本地 tgz 装（最适合发给别人，也最稳）
 
 和方式一的第二步是同一条命令，区别只在于**包从哪来**：对方收你的微信/网盘/邮件附件，而不是自己去下。
-包名固定是 `dsh-floatball-pet-<版本>.tgz`，当前发布版是 `dsh-floatball-pet-0.2.21.tgz`。
+包名固定是 `dsh-floatball-pet-<版本>.tgz`，当前发布版是 `dsh-floatball-pet-0.1.0.tgz`。
 
 ```powershell
-dsh plugin --profile desktop add "<放 tgz 的目录>\dsh-floatball-pet-0.2.21.tgz"
+dsh plugin --profile desktop add "<放 tgz 的目录>\dsh-floatball-pet-0.1.0.tgz"
 ```
 
 体积约 114.5 MB。**把这个文件放在一个不会被清理的地方**：本地路径装出来的依赖会记住这个位置
@@ -158,14 +158,14 @@ dsh plugin --profile desktop add "<放 tgz 的目录>\dsh-floatball-pet-0.2.21.t
 ### 方式二：直接用 GitHub 仓库安装（不需要 Release）
 
 ```powershell
-dsh plugin --profile desktop add git+https://github.com/riceyu02/dsh-floatball-pet.git#v0.2.21
+dsh plugin --profile desktop add git+https://github.com/riceyu02/dsh-floatball-pet.git#v0.1.0
 ```
 
 前置条件：**`git` 必须在 PATH 上**（pnpm 靠它取仓库）。用 `git+https://…` 而不是 `github:` 简写
 ——后者会被解析成 `git+ssh://git@github.com/…`，没有配 SSH key 的机器会直接
 `Host key verification failed`。
 
-**建议钉一个 tag（如上面的 `#v0.2.21`），不要跟着 `main` 走。** 原因见下：放行的键里带着 commit，
+**建议钉一个 tag（如上面的 `#v0.1.0`），不要跟着 `main` 走。** 原因见下：放行的键里带着 commit，
 跟 `main` 意味着插件每更新一次，装的人就要重新放行一次；钉 tag 则一个版本只需放行一次。
 
 这条路径不下载预编译包，而是在你机器上现装依赖、现组装 Electron 运行时——实测装完 `runtime\`
@@ -219,7 +219,7 @@ git clone https://github.com/riceyu02/dsh-floatball-pet.git
 cd dsh-floatball-pet
 npm install                      # 若 Electron 下载太慢，先设镜像，见「常见问题」
 npm run build:dsh-plugin         # 产出 artifacts\dsh-floatball-pet-<版本>.tgz
-dsh plugin --profile desktop add "$PWD\artifacts\dsh-floatball-pet-0.2.21.tgz"
+dsh plugin --profile desktop add "$PWD\artifacts\dsh-floatball-pet-0.1.0.tgz"
 ```
 
 `npm install` 时 `prepare` 钩子**会跳过运行时组装**——它认得出这是工作副本（有 `.git`），
@@ -240,12 +240,12 @@ DSH 的 agent 手上有插件管理接口，能自己装完这一套：下载、
 把下面这段连同链接（或文件）发给对方的 DSH 即可：
 
 > 帮我装这个插件：`https://github.com/riceyu02/dsh-floatball-pet`
-> 用 Release **v0.2.21** 里的 `dsh-floatball-pet-0.2.21.tgz`，装进 `desktop` profile。
+> 用 Release **v0.1.0** 里的 `dsh-floatball-pet-0.1.0.tgz`，装进 `desktop` profile。
 > 需要放行构建脚本就先问我；装完告诉我结果。
 
 对方网络连不上 `github.com` 时，改成把 tgz 直接发给他：
 
-> 这是我给你的插件包 `dsh-floatball-pet-0.2.21.tgz`（DSH 悬浮球桌宠），帮我装进 `desktop` profile。
+> 这是我给你的插件包 `dsh-floatball-pet-0.1.0.tgz`（DSH 悬浮球桌宠），帮我装进 `desktop` profile。
 
 会发生什么：
 
@@ -370,7 +370,7 @@ dsh-floatball-pet/
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。美术素材允许随本应用及其插件包公开分发，
 但不包含在 MIT 授权范围内，也不授权脱离本应用单独复用。
 
-## 更新插件时的一个坑（0.2.21 起已解决）
+## 更新插件时的一个坑（0.1.0 起已解决）
 
 0.2.20 及更早的版本里，悬浮球（以及它拉起的**焦点帮手**，那是一个 detached 的 `DSH悬浮球.exe`
 进程，托盘退出不会带走它）运行时会锁住 `node_modules\dsh-floatball-pet\runtime\` 里的文件，pnpm
@@ -378,14 +378,14 @@ dsh-floatball-pet/
 办法是**升级前先退出悬浮球**，并确认没有 `DSH悬浮球` 进程残留（托盘 → 退出，或先
 `dsh plugin --profile desktop remove dsh-floatball-pet`），装完再重启 DSH。
 
-**0.2.21 起这个坑消失了**：运行时不再放在包目录里，而是落在
+**0.1.0 起这个坑消失了**：运行时不再放在包目录里，而是落在
 `<DSH_HOME>\dsh-floatball-pet\runtime\<electron 版本>\`（见「安装」一节）。pnpm 替换包目录时碰不到
 正在运行的 exe，升级前不必再退出悬浮球。仍然要记得：同一个包换版本后 DSH 会报
 `restart-required`——新代码要重启才能加载。
 
 ## 运行时放在哪、什么时候下载
 
-0.2.21 起，插件包本身不含 Electron（`runtime/` 是个 269 MB 的 Electron 副本，占了整包的 100%）。
+0.1.0 起，插件包本身不含 Electron（`runtime/` 是个 269 MB 的 Electron 副本，占了整包的 100%）。
 安装时由 `tools/prepare-install.cjs` 组装，落在**包外**的版本化缓存里：
 
 ```text
@@ -397,7 +397,7 @@ dsh-floatball-pet/
 | 情形 | 会发生什么 |
 |---|---|
 | 全新安装 | 下载 Electron（约 110 MB）→ 校验 SHA-256 → 解压 → 组装，约 10–40 秒 |
-| **升级插件版本**（如 0.2.21 → 0.2.22） | **什么都不做**，缓存命中，实测 0.09 秒、零下载 |
+| **升级插件版本**（如 0.1.0 → 0.1.1） | **什么都不做**，缓存命中，实测 0.09 秒、零下载 |
 | 升级到新的 Electron 版本 | 新版本有自己的目录，需再下载一次；旧目录可手动删除 |
 | 装了自带运行时的整包 | 包内 `runtime/` 优先，缓存完全不参与 |
 
