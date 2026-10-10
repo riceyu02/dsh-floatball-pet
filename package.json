@@ -36,7 +36,7 @@
     "pack": "node tools/assemble.cjs",
     "build:dsh-plugin": "node tools/build-dsh-plugin.cjs",
     "prepare": "node tools/prepare-install.cjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node tools/check-apply-script.cjs && node --test test/*.test.mjs"
   },
   "files": [
     "plugin",

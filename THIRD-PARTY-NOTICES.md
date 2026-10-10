@@ -35,10 +35,10 @@ The following artwork is supplied by the project maintainer. The maintainer
 has confirmed that it may be publicly distributed and used as part of this
 application. It is not licensed under the project's MIT License:
 
-- `assets/whale-girl-src.jpg`
 - `src/renderer/assets/avatar.png`
-- `src/renderer/assets/whale-girl.png`
-- `src/renderer/assets/whale-girl-face.png`
+
+The reference sheet the ball artwork was drawn from is kept by the maintainer
+outside this repository and is not distributed.
 
 Permission covers redistribution with this application and its compiled plugin
 packages. It does not grant permission to reuse the artwork separately or in

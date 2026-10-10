@@ -329,7 +329,8 @@ dsh-floatball-pet/
 ├── src/                         # Electron 应用（主进程 / 渲染进程 / 托盘 / 图标）
 ├── tools/                       # 构建与运维脚本（组装运行时、打包插件、发布 Release）
 ├── test/host.test.mjs           # 宿主插件的单元测试（node --test）
-├── docs/                        # 三张状态截图
+├── CHANGELOG.md                 # 更新日志（当前这条线）
+├── docs/                        # 三张状态截图 + 旧版本更新日志
 └── build/icon.ico               # 应用图标
 ```
 
@@ -357,7 +358,8 @@ dsh-floatball-pet/
   路由，桌面窗口由它拉起与回收。没有 DSH 就没有这个插件。
 - **提 issue 与帮忙实测的朋友**——置顶闪烁、按 Win 键后球不回来、自动更新失败、拖动沉底、
   全屏切换后卡死这些 bug 都是实测报上来的，修复依据（含他们的测量数据）都记在
-  [CHANGELOG.md](CHANGELOG.md) 里。
+  [CHANGELOG.md](CHANGELOG.md) 里（改名前的 0.2.x 记录在
+  [docs/CHANGELOG-0.2.x.md](docs/CHANGELOG-0.2.x.md)）。
 
 > 说明：本项目是**第三方社区插件**，与 DeepSeek 官方无隶属或合作关系；致谢仅表示对平台与
 > 反馈者的感谢。
@@ -372,16 +374,13 @@ dsh-floatball-pet/
 
 ## 更新插件时的一个坑（0.1.0 起已解决）
 
-0.2.20 及更早的版本里，悬浮球（以及它拉起的**焦点帮手**，那是一个 detached 的 `DSH悬浮球.exe`
-进程，托盘退出不会带走它）运行时会锁住 `node_modules\dsh-floatball-pet\runtime\` 里的文件，pnpm
-因此在替换时报 `ERR_PNPM_EPERM ... runtime`（已实测，状态会干净回滚、旧版本照常可用）。那时的
-办法是**升级前先退出悬浮球**，并确认没有 `DSH悬浮球` 进程残留（托盘 → 退出，或先
-`dsh plugin --profile desktop remove dsh-floatball-pet`），装完再重启 DSH。
+0.2.20 及更早的版本把运行时放在包目录里，悬浮球（以及托盘退出带不走的**焦点帮手**进程）运行时
+会锁住那些文件，pnpm 替换时报 `ERR_PNPM_EPERM ... runtime`——那时升级前必须先退出悬浮球，并确认
+没有 `DSH悬浮球` 进程残留。
 
-**0.1.0 起这个坑消失了**：运行时不再放在包目录里，而是落在
-`<DSH_HOME>\dsh-floatball-pet\runtime\<electron 版本>\`（见「安装」一节）。pnpm 替换包目录时碰不到
-正在运行的 exe，升级前不必再退出悬浮球。仍然要记得：同一个包换版本后 DSH 会报
-`restart-required`——新代码要重启才能加载。
+**0.1.0 起运行时落在包外**（`<DSH_HOME>\dsh-floatball-pet\runtime\<electron 版本>\`，见文末
+「运行时放在哪、什么时候下载」），pnpm 碰不到正在运行的 exe，升级前不必再退出悬浮球。唯一还要
+记得的是：同一个包换版本后 DSH 会报 `restart-required`，新代码要重启才加载。
 
 ## 运行时放在哪、什么时候下载
 

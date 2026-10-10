@@ -20,5 +20,5 @@ build/PetFocus.dll
 *.log
 *.tmp
 
-# tools/_check-apply-script.cjs 的抽检产物（可随时重新生成）
+# tools/check-apply-script.cjs 的抽检产物（npm test 每次都会重新生成）
 tools/apply-script.extracted.cjs

@@ -7,7 +7,9 @@
  * a broken line inside it passes `node --check src/update.js` and only fails on the one
  * machine that tries to self-update. This makes that failure visible here instead.
  *
- *   node tools/_check-apply-script.cjs
+ * Runs first in `npm test`, so a broken apply script fails the build instead of shipping:
+ *
+ *   node tools/check-apply-script.cjs
  */
 const fs = require('node:fs');
 const path = require('node:path');
