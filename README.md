@@ -81,17 +81,21 @@ cd "<DSH 安装目录>\resources\runtime\cli\bin"
 
 `--profile desktop` 是桌面版实际使用的 profile 名，**不要改**。
 
-装法一共五条，代价差得很多，按省事程度排：
+> **改过名。** 这个项目原本叫 `dsh-desktop-pet`，仓库已迁到
+> [riceyu02/dsh-floatball-pet](https://github.com/riceyu02/dsh-floatball-pet)，旧的
+> [riceyu02/dsh-desktop-pet](https://github.com/riceyu02/dsh-desktop-pet) 保留作存档、不再更新。
+> 装过旧版的人：旧版的自更新器指向旧仓库，要按方式一或方式零重装一次才能跟到新仓库。
+
+装法一共四条，代价差得很多，按省事程度排：
 
 | 方式 | 需要什么 | 代价 |
 |---|---|---|
-| **方式四**（从 npm 装，插件页一键） | 能连 npm 源（国内选「中国大陆镜像源」） | 2.2 MB 的包，装时**另下约 110 MB 的 Electron**；**唯一能在插件页里一键装的方式** |
 | **方式零**（用本地 Release 包，最适合发给别人） | 只要能收到 `dsh-floatball-pet-0.1.0.tgz` 这个文件 | 约 114.5 MB 的包（内含运行时），装完即用：不构建、**不下载 Electron**、不需要放行构建脚本 |
 | **方式一**（Release 下载地址，推荐） | 能连 `github.com` | 下载 114.5 MB |
 | **方式二**（git 仓库地址） | 能连 `github.com`、`git` 在 PATH、放行构建脚本 | 包里只有代码（约 2 MB），装的时候**另下约 110 MB 的 Electron**；换 commit 要重新放行一次 |
 | **方式三**（自己构建） | Node.js 22+，能连 `github.com` 与 npm 源 | `npm install` 之后自己跑一条打包命令；不需要放行构建脚本，适合想改代码的人 |
 
-两个包的体积差在哪：**0.1.0 起，从源码构建出来的包不含 Electron**（`runtime/` 占了旧包的
+两个包的体积差在哪：**0.1.0 起，方式二装出来的包不含 Electron**（`runtime/` 占了旧包的
 100%），改为安装时按需下载并缓存；而 Release 里那份是特意打进包的，给**装完即用、甚至离线**的场景。
 两条路的运行时位置、下载时机和缓存规则见文末「运行时放在哪、什么时候下载」一节。
 
@@ -182,33 +186,6 @@ allowBuilds:
 不是裸包名**——pnpm 对 git 依赖只认这个精确匹配（裸包名与通配符都不生效），而地址里带着它给
 这次抓取算的 commit，所以换一个 commit 就得换一行。DSH 插件页上也有对应的
 「允许这些脚本并重试」按钮。Electron 下载慢时先设 `$env:ELECTRON_MIRROR`，见「常见问题」。
-
-### 方式四：从 npm 装（DSH 插件页里一键安装）
-
-包名是 **`dsh-floatball-pet`**，与仓库同名。
-
-> **改过名。** 这个项目原本叫 `dsh-desktop-pet`，npm 上那个裸名已被另一个作者的同类项目占用
-> （作者 `matchafrenchfries`），所以 npm 包名换成了 `dsh-floatball-pet`；GitHub 仓库也迁到了
-> [riceyu02/dsh-floatball-pet](https://github.com/riceyu02/dsh-floatball-pet)，旧仓库保留作为存档。
-> 已经装过旧版的人：旧版的自更新器指向旧仓库，需要按方式一/方式零重装一次才能跟到新仓库。
-
-这是**唯一能让"DSH 插件页 → 添加插件 → 中国大陆镜像源"生效**的方式：那个面板里只有
-npm 包名会走镜像源，GitHub 地址和 `.tgz` 直链都会绕过它。
-
-**在插件页里**：DSH 设置 → 插件 → 添加插件 → 填 `dsh-floatball-pet` →
-安装源选「中国大陆镜像源」→ 安装 → **完全退出并重开 DSH**。
-
-**命令行等价**：
-
-```powershell
-dsh plugin --profile desktop add dsh-floatball-pet
-```
-
-它和方式二一样是**不含运行时的包**（约 2.2 MB），安装时按需下载 Electron——首次约 110 MB，
-之后升级不再下载。缓存规则见文末「运行时放在哪、什么时候下载」。
-
-> 中国大陆镜像源同步需要一点时间：刚发布的版本可能还没同步过去，查不到就先用方式一/方式零，
-> 或把安装源换成默认源再试。
 
 ### 方式三：自己构建
 
