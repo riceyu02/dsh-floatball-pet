@@ -43,7 +43,7 @@ DeepSeek 余额、下面显示 DSH 运行时长（精确到秒），最右边一
 | 方式 | 适合 | 代价 |
 |---|---|---|
 | **方式一**（npm，插件页直接输入） | 大多数人；唯一能在插件页里直接装的方式 | 1.7 MB 的包，装时另下约 110 MB 的 Electron，要放行一次构建脚本 |
-| **方式二**（GitHub 上的 .tgz） | npm 装不了，或想直接从 GitHub 拿 | 1.7 MB 的包，装时同样下载约 110 MB 运行时，要放行一次构建脚本 |
+| **方式二**（GitHub 上的 .tgz） | npm 装不了，或想直接从 GitHub 拿 | 常规包 1.7 MB（装时下约 110 MB 运行时）；另有 114 MB 的 `-full` 包给离线 / 旧版更新器用 |
 
 ### 方式一：从 npm 装（推荐）
 
@@ -66,14 +66,18 @@ pnpm 11 默认不放行。插件页点「允许这些脚本并重试」；命令
 
 ### 方式二：用 GitHub 上的 .tgz
 
-和 npm 上的是同一个包（约 1.7 MB，**不含运行时**）。从
-[Releases](https://github.com/riceyu02/dsh-floatball-pet/releases) 下载，或让别人把文件发你：
+Release 页有两个包，按用途选：
+
+| 文件 | 大小 | 用途 |
+|---|---|---|
+| `dsh-floatball-pet-<版本>.tgz` | 约 1.7 MB | 推荐；不含运行时，安装时下载约 110 MB Electron |
+| `dsh-floatball-pet-<版本>-full.tgz` | 约 114 MB | 离线安装；0.1.0 的旧更新按钮只会装这个 |
 
 ```powershell
 dsh plugin --profile desktop add "<tgz 所在目录>\dsh-floatball-pet-<版本>.tgz"
 ```
 
-安装时同样会下载约 110 MB 的 Electron，pnpm 会拦一次构建脚本，按方式一那样放行即可。
+装 1.7 MB 那个时，pnpm 会拦一次构建脚本，按方式一那样放行即可；`-full` 包自带运行时，不需要放行。
 
 > 这个文件别放临时目录：profile 会把它记成 `file:` 路径，日后升级或重装还要回来找。路径建议全英文。
 
