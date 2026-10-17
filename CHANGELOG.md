@@ -10,6 +10,8 @@
   `npm start` / `npm run pack` 和 electron-builder 的 portable 配置。悬浮球本来就用自带的 Electron
   运行时承载，所以包体几乎不变（npm 包少约 6 KB，Release 整包相同）。
 - **变更**开发调试入口改为 `npm run dev`，直接起 Electron 调界面，不经过 DSH。
+- **移除**「开机自启动」功能：设置页的开关、宿主的注册表读写（`HKCU\...\Run`）、
+  应用侧的 `setLoginItemSettings` 调用全部删除。需要开机启动请自行把 DSH 加进系统启动项。
 
 ## 0.1.0
 

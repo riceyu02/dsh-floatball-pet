@@ -8,7 +8,6 @@ const DEFAULTS = {
   opacity: 1,
   centerX: null,
   centerY: null,
-  autoStart: false,
   // Keep the island unfolded instead of opening it on hover.
   islandPinned: false,
   // Absolute path to a custom ball image (static or animated GIF). null = built-in art.

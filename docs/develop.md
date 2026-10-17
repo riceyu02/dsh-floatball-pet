@@ -13,7 +13,7 @@ npm run dev        # 直接用 Electron 起悬浮球，只用于调界面
 ```
 
 `npm run dev` 跑的是插件里同一个 Electron 程序，但**不经过 DSH**：偏好和日志写在
-`%APPDATA%\DSH 悬浮球\`，不碰 profile 里的数据。要看真实的插件行为（设置页、开机自启、
+`%APPDATA%\DSH 悬浮球\`，不碰 profile 里的数据。要看真实的插件行为（设置页、
 更新检查），按 README 装一次插件再测。
 
 > `npm install` 会提示 `koffi` 有安装脚本（`cnoke … --prebuild`）要放行——**不用放行**。原生二进制来自

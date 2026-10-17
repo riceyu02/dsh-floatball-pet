@@ -465,42 +465,6 @@ export async function applyUpdate({ release, profileDir, supervisor, log = () =>
   return { ok: result.code === 0, code: result.code, tarball: target, removed, output: result.output.slice(-2000) }
 }
 
-/* --------------------------------------------------------------- auto start --- */
-
-async function electronApp() {
-  try {
-    const { app } = await import('electron')
-    return app && typeof app.getLoginItemSettings === 'function' ? app : null
-  } catch {
-    return null
-  }
-}
-
-/**
- * "开机自启动" in plugin mode means DSH starts at login.
- *
- * The helper is a child of DSH: nothing launches it before DSH exists, so registering the
- * ball's own executable as a login item — what the standalone build does — would either do
- * nothing or start a second, unmanaged ball. The plugin's switch therefore writes DSH's
- * own login item, and the ball appears with it.
- */
-export async function readAutoStart() {
-  const app = await electronApp()
-  if (!app) return null
-  try {
-    return Boolean(app.getLoginItemSettings().openAtLogin)
-  } catch {
-    return null
-  }
-}
-
-export async function writeAutoStart(enabled) {
-  const app = await electronApp()
-  if (!app) throw new Error('拿不到 DSH 的启动项接口，无法修改开机自启动')
-  app.setLoginItemSettings({ openAtLogin: Boolean(enabled), path: process.execPath, args: [] })
-  return readAutoStart()
-}
-
 /* ------------------------------------------------------------------- routes --- */
 
 function sendJson(res, status, payload) {
@@ -542,17 +506,9 @@ function registerRoutes(ctx, state) {
             profile: path.basename(state.profileDir),
             running: state.supervisor.running,
             enabled: state.enabled,
-            autoStart: await readAutoStart(),
             runtimeReady: Boolean(state.supervisor.runtimePath),
             canUpdate: Boolean(dshCliPath()),
           })
-          return
-        }
-        if (req.method === 'POST' && route === '/startup') {
-          const body = await readJsonBody(req)
-          const autoStart = await writeAutoStart(body.enabled !== false)
-          report(ctx, 'info', `开机自启动已${autoStart ? '打开' : '关闭'}`)
-          sendJson(res, 200, { ok: true, autoStart })
           return
         }
         if (req.method === 'POST' && route === '/ball') {
@@ -636,7 +592,7 @@ export function apply(ctx, config = {}) {
     try {
       return JSON.parse(readFileSync(switchFile, 'utf8')).enabled !== false
     } catch {
-      return config.autoStart !== false
+      return config.startEnabled !== false
     }
   }
   const state = {

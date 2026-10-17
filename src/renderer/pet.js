@@ -21,8 +21,6 @@ const sizeInput = document.getElementById('size');
 const sizeOut = document.getElementById('sizeOut');
 const opacityInput = document.getElementById('opacity');
 const opacityOut = document.getElementById('opacityOut');
-const autoStartInput = document.getElementById('autoStart');
-const autoStartRow = document.getElementById('autoStartRow');
 const dshManagedHint = document.getElementById('dshManagedHint');
 const pinIslandInput = document.getElementById('pinIsland');
 const ballImageName = document.getElementById('ballImageName');
@@ -475,8 +473,6 @@ function apply(snapshot) {
     opacityInput.value = String(Math.round(config.opacity * 100));
     opacityOut.textContent = `${Math.round(config.opacity * 100)}%`;
   }
-  autoStartInput.checked = !!config.autoStart;
-  autoStartRow.hidden = !!config.managedByDsh;
   dshManagedHint.hidden = !config.managedByDsh;
   quitBtn.textContent = config.managedByDsh ? '本次关闭' : '退出';
   quitBtn.title = config.managedByDsh ? '关闭到下次启动 DSH' : '';
@@ -593,10 +589,6 @@ opacityInput.addEventListener('input', () => {
   opacityOut.textContent = `${percent}%`;
   document.documentElement.style.setProperty('--op', String(percent / 100));
   api.set({ opacity: percent / 100 });
-});
-
-autoStartInput.addEventListener('change', () => {
-  api.set({ autoStart: autoStartInput.checked });
 });
 
 // "灵动岛常驻展开": the main process owns the open/closed state (hover is decided

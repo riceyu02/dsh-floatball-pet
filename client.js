@@ -14,11 +14,8 @@ window.__ModuleLoader__.load({
      */
     const copy = {
       nav: '灵动岛悬浮球',
-      intro: '桌宠悬浮球与灵动岛。这里只控制它开不开、以及版本更新；大小、图标、灵动岛这些外观设置在悬浮球自己的齿轮面板里。',
       enable: '启用灵动岛悬浮球',
       enableHint: '关掉只是停止悬浮球进程，灵动岛的外观与偏好设置都原样保留。',
-      startup: '开机自启动',
-      startupHint: '开机后自动启动 DSH，悬浮球随之出现。插件模式下悬浮球由 DSH 拉起，所以这一项就是让 DSH 开机启动。',
       version: '版本',
       check: '检查更新',
       checking: '正在查询 GitHub…',
@@ -115,19 +112,6 @@ window.__ModuleLoader__.load({
         }
       }
 
-      const toggleStartup = async (enabled) => {
-        setBusy('startup')
-        setError('')
-        try {
-          const result = await request('/startup', { body: JSON.stringify({ enabled }) })
-          setStatus((current) => ({ ...(current || {}), autoStart: result.autoStart }))
-        } catch (err) {
-          setError(err.message || String(err))
-        } finally {
-          setBusy('')
-        }
-      }
-
       const check = async () => {
         setBusy('check')
         setError('')
@@ -174,7 +158,6 @@ window.__ModuleLoader__.load({
 
       return React.createElement('section', { className: 'dsh-pet-set' },
         React.createElement('h2', { className: 'dsh-pet-set-title' }, copy.nav),
-        React.createElement('p', { className: 'dsh-pet-set-intro' }, copy.intro),
 
         error ? React.createElement('div', { className: 'dsh-pet-set-error-row' },
           React.createElement('p', { className: 'dsh-pet-set-error' }, error),
@@ -194,16 +177,6 @@ window.__ModuleLoader__.load({
           disabled: !available || busy === 'ball',
           label: copy.enable,
           onChange: toggleBall,
-        })),
-
-        React.createElement(Row, {
-          label: copy.startup,
-          hint: copy.startupHint,
-        }, React.createElement(Switch, {
-          checked: available ? status.autoStart === true : false,
-          disabled: !available || status.autoStart === null || busy === 'startup',
-          label: copy.startup,
-          onChange: toggleStartup,
         })),
 
         React.createElement(Row, {
@@ -233,8 +206,7 @@ window.__ModuleLoader__.load({
 
     const style = `
 .dsh-pet-set { display: flex; flex-direction: column; gap: 4px; }
-.dsh-pet-set-title { margin: 0; font-size: 20px; }
-.dsh-pet-set-intro { margin: 2px 0 10px; font-size: 12px; opacity: 0.7; line-height: 1.6; }
+.dsh-pet-set-title { margin: 0 0 6px; font-size: 20px; }
 .dsh-pet-set-field { padding: 12px 0; border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent); }
 .dsh-pet-set-row { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
 .dsh-pet-set-label { font-size: 13px; font-weight: 600; }

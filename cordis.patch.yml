@@ -20,7 +20,7 @@
     - id: dsh-desktop-pet-host
       name: 'dsh-floatball-pet/host'
       config:
-        autoStart: true
+        startEnabled: true
         gameProcesses: []
         ignoreProcesses: []
     - id: ui-settings-dsh-floatball-pet

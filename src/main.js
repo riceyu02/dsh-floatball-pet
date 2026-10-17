@@ -190,10 +190,6 @@ const HOVER_SLACK = 8;
 
 const store = new Store(path.join(app.getPath('userData'), 'preferences.json'));
 
-// DSH owns startup in plugin mode.  Ignore a legacy standalone preference so
-// the helper never registers a second, independent Windows login entry.
-if (PLUGIN_MANAGED) store.data.autoStart = false;
-
 let win = null;
 let tray = null;
 
@@ -894,7 +890,6 @@ function snapshot() {
     config: {
       ballSize: store.data.ballSize,
       opacity: store.data.opacity,
-      autoStart: store.data.autoStart,
       islandPinned: store.data.islandPinned === true,
       ballImage: ballImageUrl(),
       showBalance: store.data.showBalance,
@@ -1344,20 +1339,6 @@ function createTray() {
   tray.on('click', () => { if (win) { win.showInactive(); assertOnTop(); } });
 }
 
-function applyAutoStart(enabled) {
-  if (PLUGIN_MANAGED) return;
-  if (process.platform !== 'win32') return;
-  try {
-    app.setLoginItemSettings({
-      openAtLogin: enabled,
-      path: process.execPath,
-      args: app.isPackaged ? [] : [path.resolve(__dirname, '..')],
-    });
-  } catch (error) {
-    console.error('[pet] auto-start failed:', error.message);
-  }
-}
-
 /* -------------------------------------------------------------------- IPC */
 
 /**
@@ -1673,7 +1654,6 @@ function registerIpc() {
       clean.ballSize = Math.min(MAX_SIZE, Math.max(MIN_SIZE, Math.round(patch.ballSize)));
     }
     if (Number.isFinite(patch.opacity)) clean.opacity = Math.min(1, Math.max(0.35, patch.opacity));
-    if (!PLUGIN_MANAGED && typeof patch.autoStart === 'boolean') clean.autoStart = patch.autoStart;
     if (typeof patch.islandPinned === 'boolean') clean.islandPinned = patch.islandPinned;
     if (typeof patch.showBalance === 'boolean') clean.showBalance = patch.showBalance;
     if (typeof patch.showUptime === 'boolean') clean.showUptime = patch.showUptime;
@@ -1687,7 +1667,6 @@ function registerIpc() {
     Object.assign(store.data, clean);
     saveSoon();
 
-    if (clean.autoStart !== undefined) applyAutoStart(clean.autoStart);
     if (clean.ballSize !== undefined) {
       // A bigger ball needs more room, so re-resolve the display it lives on,
       // then let the size chase its new target frame by frame.
@@ -1786,8 +1765,6 @@ if (!app.requestSingleInstanceLock()) {
     createTray();
     log('tray created');
     if (process.env.PET_DEBUG) startDebugServer();
-
-    applyAutoStart(store.data.autoStart);
 
     // A normal Cordis dispose asks the child to exit.  This watchdog covers the
     // less graceful cases (DSH is killed, crashes, or its host process is ended)
