@@ -134,7 +134,7 @@ export function resolveRuntime(packageRoot = PACKAGE_ROOT, env = process.env, pr
   return candidates.find(candidate => existsSync(candidate)) ?? null
 }
 
-export function helperEnvironment({ profileDir, userDataDir, hostPid, noSandbox = false, gameProcesses = [], ignoreProcesses = [] }, env = process.env) {
+export function helperEnvironment({ profileDir, userDataDir, hostPid, dshUrl = null, noSandbox = false, gameProcesses = [], ignoreProcesses = [] }, env = process.env) {
   // The DSH host hands its own children `ELECTRON_RUN_AS_NODE=1` — that is how the CLI
   // and its helper scripts reuse the Electron binary as Node. Inherited by the pet it
   // does the same thing to it: the helper starts as a plain Node process, so no window
@@ -150,6 +150,13 @@ export function helperEnvironment({ profileDir, userDataDir, hostPid, noSandbox 
     ...inherited,
     DSH_HOME: resolveDshHome(profileDir, env),
     DSH_PROFILE_DIR: path.resolve(profileDir),
+    // Which port DSH's web server is on. The pet decides "DSH is running" by connecting
+    // to it and reads the uptime from the process start time once it has, so a wrong
+    // port is not a detail: it is the island reporting 「未运行」 while DSH is on screen.
+    // The port is ephemeral, so the only dependable answer comes from the process that
+    // is listening — this one. Without it the pet falls back to a log file that may be
+    // stale and to the port DSH used to keep, and on this machine both miss.
+    ...(dshUrl ? { DSH_WEB_URL: dshUrl } : {}),
     DSH_PET_PLUGIN: '1',
     DSH_PET_PLUGIN_HOST_PID: String(hostPid),
     DSH_PET_USER_DATA: path.resolve(userDataDir),
@@ -186,6 +193,9 @@ export class PetSupervisor {
     this.spawn = options.spawn ?? nodeSpawn
     this.log = options.log ?? (() => {})
     this.retryDelayMs = options.retryDelayMs ?? 300
+    // A string, or a function read at every launch: the web server may not be listening
+    // when the plugin is applied, and a retry has to see the address that exists then.
+    this.dshUrl = options.dshUrl ?? null
     this.child = null
     this.retryTimer = null
     this.stopping = false
@@ -223,6 +233,7 @@ export class PetSupervisor {
         profileDir: this.profileDir,
         userDataDir: this.userDataDir,
         hostPid: this.hostPid,
+        dshUrl: typeof this.dshUrl === 'function' ? this.dshUrl() : this.dshUrl,
         noSandbox,
         gameProcesses: this.gameProcesses,
         ignoreProcesses: this.ignoreProcesses,
@@ -595,6 +606,20 @@ export function apply(ctx, config = {}) {
     runtimePath,
     profileDir,
     userDataDir,
+    // Where DSH's web server actually listens, read from the server itself. This is the
+    // one address the pet cannot derive on its own: the port is ephemeral, and the log
+    // it used to read is a leftover from a launcher that may never have run. Read on
+    // every launch, because a retry after the port exists must see the new value.
+    dshUrl: () => {
+      try {
+        const origin = ctx?.webServer?.getOrigin?.()
+        return typeof origin === 'string' && origin ? origin : null
+      } catch {
+        // `getOrigin` throws until the listener has bound; the pet then finds the port
+        // itself (see `lookupDshPort` in src/dsh.js).
+        return null
+      }
+    },
     // Which full-screen windows the pet treats as a game. `gameProcesses` forces a
     // program to count (add your game if it is missed); `ignoreProcesses` keeps one out
     // (add your video player if a borderless full-screen video hides the ball).

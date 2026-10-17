@@ -152,6 +152,30 @@ test('supervisor starts, retries an early sandbox failure, and stops the helper'
   }
 })
 
+test('hands the DSH web origin to the helper so it can find DSH', () => {
+  // The pet decides whether DSH is running by connecting to its web port, and reads the
+  // uptime only once that succeeds. The port is ephemeral, so the address has to come
+  // from the host that is listening on it; a guess shows up as 「未运行」 on a running DSH.
+  const profile = path.join('D:\\', '.dsh', 'profiles', 'desktop')
+  const env = helperEnvironment({
+    profileDir: profile,
+    userDataDir: path.join(profile, 'data', 'dsh-floatball-pet'),
+    hostPid: 123,
+    dshUrl: 'http://127.0.0.1:65064',
+  }, {})
+  assert.equal(env.DSH_WEB_URL, 'http://127.0.0.1:65064')
+
+  // And when the server has not bound yet, the inherited value (if any) is kept rather
+  // than replaced by undefined.
+  const inherited = helperEnvironment({
+    profileDir: profile,
+    userDataDir: path.join(profile, 'data', 'dsh-floatball-pet'),
+    hostPid: 123,
+    dshUrl: null,
+  }, { DSH_WEB_URL: 'http://127.0.0.1:1234' })
+  assert.equal(inherited.DSH_WEB_URL, 'http://127.0.0.1:1234')
+})
+
 test('game process lists survive the trip to the helper environment', () => {
   const env = helperEnvironment({
     profileDir: 'C:\\profile',

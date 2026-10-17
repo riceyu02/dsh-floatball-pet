@@ -355,9 +355,27 @@ async function powerShellIdentity() {
   return psIdentity;
 }
 
+/**
+ * The port DSH's web server is listening on.
+ *
+ * `DSH_WEB_URL` wins, and it is exact: whoever launched the pet is the process that is
+ * listening (the DSH plugin hands it over — see `helperEnvironment` in plugin/host.mjs).
+ * The other two are guesses. `$DSH_HOME/dsh-web-url.log` is only as fresh as the last
+ * launcher that wrote it, and 19387 is the port DSH used to keep; both were accurate
+ * until DSH began binding an ephemeral port. A guess that misses is not harmless — the
+ * island then reports 「未运行」 while DSH is plainly on screen — so `probeDsh` follows
+ * a miss with `lookupDshPort`, and the port that check finds is remembered here.
+ */
 function dshWebPort() {
-  const fromEnv = process.env.DSH_WEB_URL && new URL(process.env.DSH_WEB_URL).port;
-  if (fromEnv) return Number(fromEnv);
+  if (osPort !== null) return osPort;
+  if (process.env.DSH_WEB_URL) {
+    try {
+      const port = Number(new URL(process.env.DSH_WEB_URL).port);
+      if (port > 0) return port;
+    } catch {
+      /* not a URL — fall through to the guesses below */
+    }
+  }
   try {
     const log = fs.readFileSync(path.join(DSH_HOME, 'dsh-web-url.log'), 'utf8');
     const match = [...log.matchAll(/127\.0\.0\.1:(\d+)/g)].pop();
@@ -367,6 +385,12 @@ function dshWebPort() {
   }
   return 19387;
 }
+
+/** Port Windows confirmed a DSH process is listening on; null until one is found. */
+let osPort = null;
+/** When `lookupDshPort` last asked Windows, so a broken guess cannot spawn a shell per poll. */
+let lastPortLookupAt = 0;
+const PORT_LOOKUP_COOLDOWN_MS = 30 * 1000;
 
 /** Cheap liveness check: does anything accept connections on the DSH web port? */
 function portListening(port, timeout = 600) {
@@ -389,6 +413,43 @@ function portListening(port, timeout = 600) {
       finish(false);
     }
   });
+}
+
+/**
+ * Ask Windows which port a DSH process holds open.
+ *
+ * Nothing else in the system knows the answer as reliably: whatever is serving the DSH
+ * web UI is a `DeepSeek Harness` process, and Windows can name its listening sockets
+ * even when no environment variable and no log file mentions the port. It costs a
+ * PowerShell round trip, so a hit is kept for the life of the process and a miss is
+ * retried no more often than `PORT_LOOKUP_COOLDOWN_MS` — the "not running" poll runs
+ * every two seconds, and spawning a shell on each of those would be absurd.
+ */
+async function lookupDshPort() {
+  if (osPort !== null) return osPort;
+  if (process.platform !== 'win32') return null;
+  const now = Date.now();
+  if (now - lastPortLookupAt < PORT_LOOKUP_COOLDOWN_MS) return null;
+  lastPortLookupAt = now;
+
+  const script = [
+    "$ErrorActionPreference='SilentlyContinue'",
+    "$ids=@(Get-Process -Name 'DeepSeek Harness' | ForEach-Object { $_.Id })",
+    'if ($ids.Count -eq 0) { exit }',
+    '$p=Get-NetTCPConnection -State Listen | Where-Object { $ids -contains $_.OwningProcess } | Select-Object -First 1 -ExpandProperty LocalPort',
+    'if ($p) { "$p" }',
+  ].join('\n');
+
+  let raw = '';
+  try {
+    raw = (await runPowerShell(script, 8000)).trim();
+  } catch {
+    return null;
+  }
+  const port = Number.parseInt(raw.split(/\r?\n/).pop() || '', 10);
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) return null;
+  osPort = port;
+  return port;
 }
 
 /**
@@ -470,10 +531,25 @@ let lastClosedAt = null;
  *
  * Liveness comes from the DSH web port (no subprocess); the authoritative
  * process start time is fetched from Windows once per DSH run and remembered.
+ * The port itself has to be found before it can be connected to, which is the
+ * one thing `dshWebPort` cannot always do on its own — see the lookup below.
  */
 async function probeDsh() {
-  const port = dshWebPort();
-  const alive = await portListening(port);
+  let port = dshWebPort();
+  let alive = await portListening(port);
+
+  if (!alive) {
+    // The guessed port answered nothing. A remembered port that stopped answering is
+    // worthless — DSH came up somewhere else — so forget it, then ask Windows which
+    // port a DSH process actually holds. Without this the island reports 「未运行」 for
+    // as long as the guess stays wrong, which is what an ephemeral port makes permanent.
+    if (osPort !== null && port === osPort) osPort = null;
+    const found = await lookupDshPort();
+    if (found !== null && found !== port) {
+      port = found;
+      alive = await portListening(port);
+    }
+  }
 
   if (!alive) {
     inferredStart = null;
