@@ -3,6 +3,11 @@
 给 GitHub Release 页面用的摘要。每个 `## <版本>` 一节对应同名 tag，发布时由
 `.github/workflows/release.yml` 原样取用；完整的技术细节见 [CHANGELOG.md](CHANGELOG.md)。
 
+## 0.2.2
+
+- **修复**插件升级后悬浮球还在跑旧代码：运行时缓存按 Electron 版本复用，瘦包更新不会刷新缓存里的应用代码。
+  现在每次启动前按插件版本把应用代码同步进缓存，Electron 二进制不重新下载。
+
 ## 0.2.1
 
 两个修复：

@@ -131,6 +131,53 @@ export function resolveRuntime(packageRoot = PACKAGE_ROOT, env = process.env, pr
   return candidates.find(candidate => existsSync(candidate)) ?? null
 }
 
+/**
+ * Keep the cached runtime's app code in step with the installed package.
+ *
+ * The cache is keyed by Electron version, so installing a new plugin version used to
+ * reuse the old `resources/app` and the ball kept running the previous release's code.
+ * Copy the code entries from the package into the cached app before launch; the Electron
+ * binaries stay untouched. A full package keeps its app next to its own `runtime/` and is
+ * already current, so it is skipped.
+ *
+ * @returns {boolean} whether the cached app was rewritten
+ */
+export function syncRuntimeApp(runtimePath, packageRoot = PACKAGE_ROOT, log = () => {}) {
+  const runtimeDir = path.dirname(runtimePath)
+  const target = path.join(runtimeDir, 'resources', 'app')
+  if (!existsSync(target)) return false
+  const root = path.resolve(packageRoot)
+  if (path.resolve(runtimeDir) === root || path.resolve(runtimeDir).startsWith(root + path.sep)) return false
+  const versionOf = (dir) => {
+    try {
+      return JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8')).version || ''
+    } catch {
+      return ''
+    }
+  }
+  const version = versionOf(root)
+  if (!version || versionOf(target) === version) return false
+  const entries = [
+    'src', 'plugin', 'build', 'client.js', 'cordis.patch.yml', 'package.json',
+    'node_modules/koffi', 'node_modules/@koromix',
+  ]
+  for (const entry of entries) {
+    const source = path.join(root, entry)
+    if (!existsSync(source)) continue
+    const destination = path.join(target, entry)
+    try {
+      rmSync(destination, { recursive: true, force: true })
+      mkdirSync(path.dirname(destination), { recursive: true })
+      cpSync(source, destination, { recursive: true })
+    } catch (error) {
+      log('warn', `缓存运行时里的 ${entry} 没能更新：${error.message}`)
+    }
+  }
+  writeFileSync(path.join(runtimeDir, '.app-version'), `${version}\n`)
+  log('info', `缓存运行时应用已更新到 ${version}。`)
+  return true
+}
+
 export function helperEnvironment({ profileDir, userDataDir, hostPid, dshUrl = null, noSandbox = false, gameProcesses = [], ignoreProcesses = [] }, env = process.env) {
   // The DSH host hands its own children `ELECTRON_RUN_AS_NODE=1` — that is how the CLI
   // and its helper scripts reuse the Electron binary as Node. Inherited by the pet it
@@ -221,6 +268,11 @@ export class PetSupervisor {
 
   #launch(noSandbox) {
     const startedAt = Date.now()
+    try {
+      syncRuntimeApp(this.runtimePath, PACKAGE_ROOT, (level, message) => this.log(level, message))
+    } catch (error) {
+      this.log('warn', `缓存运行时应用更新失败：${error.message}`)
+    }
     const args = noSandbox ? ['--no-sandbox'] : []
     const child = this.spawn(this.runtimePath, args, {
       cwd: path.dirname(this.runtimePath),

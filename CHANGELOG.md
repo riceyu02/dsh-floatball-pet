@@ -5,6 +5,12 @@
 > 本文件记录 `dsh-floatball-pet` 的版本变更。
 > 发布页用的精简摘要见 [RELEASE-NOTES.md](RELEASE-NOTES.md)。
 
+## 0.2.2
+
+- **修复**更新插件后悬浮球仍运行上一个版本的代码。运行时缓存只按 Electron 版本复用，瘦包升级后会继续用缓存里
+  旧的 `resources/app`；现在每次启动前会把 `src`、`plugin`、`build`、`client.js`、`package.json` 和随包的
+  koffi 按插件版本同步进缓存（Electron 二进制不动，不重新下载）。
+
 ## 0.2.1
 
 - **修复**设置里不显示「灵动岛悬浮球」：设置行的宿主入口改到 `plugin/client-host.mjs`。npm 瘦包此前把包入口

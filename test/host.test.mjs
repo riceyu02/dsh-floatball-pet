@@ -11,6 +11,7 @@ import {
   resolveDshHome,
   resolveRuntime,
   selfSpec,
+  syncRuntimeApp,
   tarballVersion,
 } from '../plugin/host.mjs'
 
@@ -212,4 +213,30 @@ test('the package root is a host-safe stub, not the Electron entry', () => {
   assert.equal(existsSync(new URL('../plugin/client-host.mjs', import.meta.url)), true)
   // Electron still uses `main` when it launches the app itself.
   assert.equal(pkg.main, 'src/main.js')
+})
+
+test('refreshes the cached runtime app when the plugin version changes', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'pet-sync-'))
+  try {
+    const pkg = path.join(root, 'package')
+    const runtime = path.join(root, 'runtime', '33.4.11')
+    const app = path.join(runtime, 'resources', 'app')
+    mkdirSync(path.join(pkg, 'src'), { recursive: true })
+    mkdirSync(path.join(pkg, 'plugin'), { recursive: true })
+    writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ version: '1.2.3' }))
+    writeFileSync(path.join(pkg, 'src', 'main.js'), 'new code')
+    writeFileSync(path.join(pkg, 'plugin', 'client-host.mjs'), 'export {}')
+    mkdirSync(path.join(app, 'src'), { recursive: true })
+    writeFileSync(path.join(app, 'package.json'), JSON.stringify({ version: '1.2.2' }))
+    writeFileSync(path.join(app, 'src', 'main.js'), 'old code')
+    assert.equal(syncRuntimeApp(path.join(runtime, 'pet.exe'), pkg), true)
+    assert.equal(JSON.parse(readFileSync(path.join(app, 'package.json'), 'utf8')).version, '1.2.3')
+    assert.equal(readFileSync(path.join(app, 'src', 'main.js'), 'utf8'), 'new code')
+    assert.equal(existsSync(path.join(app, 'plugin', 'client-host.mjs')), true)
+    assert.equal(readFileSync(path.join(runtime, '.app-version'), 'utf8').trim(), '1.2.3')
+    // Once the versions match the launch path does no copying.
+    assert.equal(syncRuntimeApp(path.join(runtime, 'pet.exe'), pkg), false)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
