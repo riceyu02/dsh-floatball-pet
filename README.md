@@ -84,83 +84,66 @@ cd "<DSH 安装目录>\resources\runtime\cli\bin"
 > **改过名。** 这个项目原本叫 `dsh-desktop-pet`，仓库已迁到
 > [riceyu02/dsh-floatball-pet](https://github.com/riceyu02/dsh-floatball-pet)，旧的
 > [riceyu02/dsh-desktop-pet](https://github.com/riceyu02/dsh-desktop-pet) 保留作存档、不再更新。
-> 装过旧版的人：旧版的自更新器指向旧仓库，要按方式一或方式零重装一次才能跟到新仓库。
+> 装过旧版的人：要按方式一或方式二重装一次才能跟到新仓库。
 
-装法一共五条，代价差得很多，按省事程度排：
+装法一共四条，按省事程度排：
 
 | 方式 | 需要什么 | 代价 |
 |---|---|---|
-| **方式四**（从 npm 装，插件页一键） | 能连 npm 源（国内选「中国大陆镜像源」）、放行构建脚本 | 1.7 MB 的包，装时**另下约 110 MB 的 Electron**；**唯一能在插件页里一键装的方式** |
-| **方式零**（用本地 Release 包，最适合发给别人） | 只要能收到 `dsh-floatball-pet-0.1.0.tgz` 这个文件 | 约 114.5 MB 的包（内含运行时），装完即用：不构建、**不下载 Electron**、不需要放行构建脚本 |
-| **方式一**（Release 下载地址，推荐） | 能连 `github.com` | 下载 114.5 MB |
-| **方式二**（git 仓库地址） | 能连 `github.com`、`git` 在 PATH、放行构建脚本 | 包里只有代码（约 1.7 MB），装的时候**另下约 110 MB 的 Electron**；换 commit 要重新放行一次 |
-| **方式三**（自己构建） | Node.js 22+，能连 `github.com` 与 npm 源 | `npm install` 之后自己跑一条打包命令；不需要放行构建脚本，适合想改代码的人 |
+| **方式一**（从 npm 装，插件页直接输入） | 能连 npm 源（国内选「中国大陆镜像源」）、放行一次构建脚本 | 1.7 MB 的包，装时**另下约 110 MB 的 Electron**；**唯一能在插件页里直接装的方式** |
+| **方式二**（Release 整包，或别人发你的 tgz） | 能拿到 `dsh-floatball-pet-0.1.0.tgz` | 约 114.5 MB，装完即用：不构建、**不下载 Electron**、不用放行构建脚本 |
+| **方式三**（git 仓库地址） | 能连 `github.com`、`git` 在 PATH、放行构建脚本 | 包里只有代码（约 1.7 MB），装时**另下约 110 MB 的 Electron**；换 commit 要重新放行一次 |
+| **方式四**（自己构建） | Node.js 22+，能连 `github.com` 与 npm 源 | `npm install` 之后自己跑一条打包命令；适合想改代码的人 |
 
-两个包的体积差在哪：**0.1.0 起，方式二和方式四装出来的包都不含 Electron**（`runtime/` 占了旧包的
+体积差在哪：**0.1.0 起，方式一和方式三装出来的包都不含 Electron**（`runtime/` 占了旧包的
 100%），改为安装时按需下载并缓存；而 Release 里那份是特意打进包的，给**装完即用、甚至离线**的场景。
-两条路的运行时位置、下载时机和缓存规则见文末「运行时放在哪、什么时候下载」一节。
+缓存规则见文末「运行时放在哪、什么时候下载」。
 
-**要发给别人，用方式零**——不依赖对方能否连 GitHub、也不用等他构建，最不容易中途卡住。方式二更适合想跟源码、或拿不到 Release 资产的人。
+**要发给别人，用方式二**——不依赖对方能否连 GitHub、也不用等他构建。想跟着源码走用方式三，
+代价是换一个 commit 就要重新放行一次。
 
-> 下面的小节顺序是「方式一 → 方式零 → 方式二 → 方式四 → 方式三」：方式一和方式零用的是同一个包、同一条命令，只是包从哪来不同，所以放在一起讲。
+### 方式一：从 npm 装（推荐，插件页里直接输入）
 
-### 方式一：装 Release 里的安装包（推荐，不需要编译）
+包名 **`dsh-floatball-pet`**，发布在 npmjs 上：<https://www.npmjs.com/package/dsh-floatball-pet>。
 
-**第一步：拿到这个文件。** 两种途径，任选其一。
+**在 DSH 插件页里**：设置 → 插件 → 添加插件 → 输入 `dsh-floatball-pet` →
+安装源选「中国大陆镜像源」→ 安装。这个面板里只有 npm 包名会走镜像源，GitHub 地址和 `.tgz`
+直链都会绕过它。
 
-浏览器下载：打开 [Releases](https://github.com/riceyu02/dsh-floatball-pet/releases) 页面，
-在 `v0.1.0` 那一条下面点 `dsh-floatball-pet-0.1.0.tgz`（约 114.5 MB）。
-
-命令行下载（省得点）：
-
-```powershell
-curl.exe -L -o "$env:USERPROFILE\Downloads\dsh-floatball-pet-0.1.0.tgz" `
-  https://github.com/riceyu02/dsh-floatball-pet/releases/download/v0.1.0/dsh-floatball-pet-0.1.0.tgz
-```
-
-> **`curl.exe` 不会自动走系统代理**：代理只配在浏览器里的话，这条会变成直连 `github.com`，
-> 实测能连上但慢到几 KB/s。有代理就显式加上（端口按自己的代理软件改）：
->
-> ```powershell
-> curl.exe -L --proxy http://127.0.0.1:7897 -o "$env:USERPROFILE\Downloads\dsh-floatball-pet-0.1.0.tgz" `
->   https://github.com/riceyu02/dsh-floatball-pet/releases/download/v0.1.0/dsh-floatball-pet-0.1.0.tgz
-> ```
->
-> 不想折腾命令行就走浏览器下载那条。
-
-**第二步：用本地路径装它。**
+**命令行等价**：
 
 ```powershell
-dsh plugin --profile desktop add "$env:USERPROFILE\Downloads\dsh-floatball-pet-0.1.0.tgz"
+dsh plugin --profile desktop add dsh-floatball-pet
 ```
 
-**第三步：完全退出并重新打开 DSH**，悬浮球就会出现。
+第一次装会停在**构建脚本**这一步：包里的 `postinstall` 要在你机器上下载、校验、组装 Electron
+运行时（约 110 MB），pnpm 11 默认不放行。插件页上点「允许这些脚本并重试」；命令行就把 pnpm
+打印的那行加进 `<profile>\pnpm-workspace.yaml`（键是 `dsh-floatball-pet@0.1.0`）再跑一次。
+同一版本重装不再问，只有**换版本**才需要再放行。
 
-> 也可以跳过第一步，直接把地址交给 DSH 去取：
->
-> ```powershell
-> dsh plugin --profile desktop add https://github.com/riceyu02/dsh-floatball-pet/releases/download/v0.1.0/dsh-floatball-pet-0.1.0.tgz
-> ```
->
-> 但下载是 **DSH 自己在做**，走的是命令行网络：如果这台机器只有浏览器能连 GitHub（代理只配在
-> 浏览器里），这条会卡住或报错，那就换回本地路径那条。**别用会被清理的目录**——`file:` 依赖会记住
-> 路径，之后文件没了，升级或重装时就取不到源。
+装完 **完全退出并重开 DSH**。运行时装在包外，缓存规则见文末。
 
-### 方式零：用本地 tgz 装（最适合发给别人，也最稳）
+### 方式二：用 Release 整包（自己下，或别人发你）
 
-和方式一的第二步是同一条命令，区别只在于**包从哪来**：对方收你的微信/网盘/邮件附件，而不是自己去下。
-包名固定是 `dsh-floatball-pet-<版本>.tgz`，当前发布版是 `dsh-floatball-pet-0.1.0.tgz`。
+包名固定 `dsh-floatball-pet-<版本>.tgz`，当前发布版是 `dsh-floatball-pet-0.1.0.tgz`，约 114.5 MB，
+**内含运行时**，装完即用、甚至离线。拿到文件的两条路，任选：
+
+- **自己下**：[Releases](https://github.com/riceyu02/dsh-floatball-pet/releases) 页面点
+  `dsh-floatball-pet-0.1.0.tgz`；或命令行
+  `curl.exe -L -o "$env:USERPROFILE\Downloads\dsh-floatball-pet-0.1.0.tgz" https://github.com/riceyu02/dsh-floatball-pet/releases/download/v0.1.0/dsh-floatball-pet-0.1.0.tgz`。
+  `curl.exe` 不走系统代理，只有浏览器配了代理的机器会很慢或失败，那就用浏览器下。
+- **别人发你**：微信 / 网盘 / 邮件附件都行。
+
+然后用本地路径装：
 
 ```powershell
-dsh plugin --profile desktop add "<放 tgz 的目录>\dsh-floatball-pet-0.1.0.tgz"
+dsh plugin --profile desktop add "<tgz 所在目录>\dsh-floatball-pet-0.1.0.tgz"
 ```
 
-体积约 114.5 MB。**把这个文件放在一个不会被清理的地方**：本地路径装出来的依赖会记住这个位置
-（profile 的 `package.json` 里写着 `file:` 加该路径），日后升级或在插件页重装时还要回来找它；
-放在临时目录里、或装完就删掉，之后就取不到源了。路径也**建议全英文**（原因见「独立运行」一节）。
-0.2.20 起安装包内已自带 koffi 及其原生二进制，对方不需要装 Node、也不需要联网。
+> **把这个文件放在不会被清理的地方**：profile 的 `package.json` 会记成 `file:` 加这个路径，日后升级
+> 或重装还要回来找它。放在临时目录、或装完就删，之后就取不到源了。路径建议全英文。
 
-### 方式二：直接用 GitHub 仓库安装（不需要 Release）
+### 方式三：直接用 GitHub 仓库安装（不需要 Release）
 
 ```powershell
 dsh plugin --profile desktop add git+https://github.com/riceyu02/dsh-floatball-pet.git#v0.1.0
@@ -188,61 +171,7 @@ allowBuilds:
 这次抓取算的 commit，所以换一个 commit 就得换一行。DSH 插件页上也有对应的
 「允许这些脚本并重试」按钮。Electron 下载慢时先设 `$env:ELECTRON_MIRROR`，见「常见问题」。
 
-### 方式四：从 npm 装（插件页里一键安装）
-
-包名是 **`dsh-floatball-pet`**，与仓库同名，发布在 npmjs 上（`npm view dsh-floatball-pet` 可查）。
-
-这是**唯一能让「DSH 插件页 → 添加插件 → 中国大陆镜像源」生效**的方式：那个面板里只有
-npm 包名会走镜像源，GitHub 地址和 `.tgz` 直链都会绕过它。
-
-**在插件页里**：DSH 设置 → 插件 → 添加插件 → 填 `dsh-floatball-pet` →
-安装源选「中国大陆镜像源」→ 安装 → **允许构建脚本** → 再点一次安装 → **完全退出并重开 DSH**。
-
-**命令行等价**：
-
-```powershell
-dsh plugin --profile desktop add dsh-floatball-pet
-```
-
-它和方式二一样是**不含运行时的包**（实测 1.7 MB / 解压 5.1 MB），装的时候按需下载 Electron
-（约 110 MB）——所以**同样要过「构建脚本」这一关**：包里的 `postinstall` 负责下载、校验、组装
-运行时，pnpm 11 默认不放行。命令行第一次跑会这样退出：
-
-```text
-[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: dsh-floatball-pet@0.1.0
-Run "pnpm approve-builds" to pick which dependencies should be allowed to run scripts.
-```
-
-插件页上是「允许这些脚本并重试」按钮。放行后的实测输出：
-
-```text
-prepare: downloading https://cdn.npmmirror.com/binaries/electron/v33.2.0/electron-v33.2.0-win32-x64.zip
-curl: (56) schannel: server closed abruptly (missing close_notify)
-prepare: downloading https://github.com/electron/electron/releases/download/v33.2.0/electron-v33.2.0-win32-x64.zip
-prepare: downloaded 109.6 MB in 26.5s (4.1 MB/s), sha256 verified
-prepare: assembling the helper runtime for Electron 33.2.0 into <DSH_HOME>\dsh-desktop-pet\runtime\33.2.0 ...
-```
-
-镜像源中途断流时会自动换 GitHub 再下一次（上面这次实测就是），两个源用的是同一个
-`SHASUMS256.txt` 校验和，换源不降低可信度；只想用一个源可以设 `DSH_PET_ELECTRON_MIRROR`。
-
-放行键是 **`包名@版本`**（如 `dsh-floatball-pet@0.1.0`，以 pnpm 自己打印的那行为准），这一点比
-方式二省心：同一个版本号怎么重装都只用放行一次，只有**换版本**才需要再放行；git 路线的键里带着
-commit，换个 commit 就得重来一遍。
-
-> 命令行里手动放行，写法与方式二相同，只是键不同：
->
-> ```yaml
-> allowBuilds:
->   "dsh-floatball-pet@0.1.0": true
-> ```
-
-> 中国大陆镜像源同步需要一点时间：刚发布的版本可能还没同步过去，查不到就把安装源换成默认源，
-> 或先用方式一/方式零。
-
-缓存规则同方式二，见文末「运行时放在哪、什么时候下载」。
-
-### 方式三：自己构建
+### 方式四：自己构建
 
 用 Node.js 22 或更高版本（`package.json` 的 `engines` 要求 `>=22`）：
 
@@ -259,7 +188,7 @@ dsh plugin --profile desktop add "$PWD\artifacts\dsh-floatball-pet-0.1.0.tgz"
 （插件安装包用）时才做，所以不会白等，也不会重复下载 Electron。
 
 这条路**不需要等 pnpm 来拦构建脚本**：你是自己跑 `npm run build:dsh-plugin` 把包造出来的，
-最后那一步 `add` 喂给 DSH 的是一个已经造好的本地 tgz，走的就是方式零那条路。
+最后那一步 `add` 喂给 DSH 的是一个已经造好的本地 tgz，走的就是方式二那条路。
 
 > **`npm install` 会提示 `koffi` 有安装脚本（`cnoke … --prebuild`）需要放行——不用放行。**
 > 包内自带的那个原生二进制来自 `@koromix/koffi-win32-x64`（预编译），`cnoke` 那一步是给
@@ -269,15 +198,16 @@ dsh plugin --profile desktop add "$PWD\artifacts\dsh-floatball-pet-0.1.0.tgz"
 ### 让 DSH 的 AI 帮你装（把下面这段发给它就行）
 
 DSH 的 agent 手上有插件管理接口，能自己装完这一套：下载、登记 bundle、处理放行、校验装没装上。
-把下面这段连同链接（或文件）发给对方的 DSH 即可：
+
+最省事的一条是走 npm（方式一）：
+
+> 帮我装 npm 上的 `dsh-floatball-pet` 插件，装进 `desktop` profile；需要放行构建脚本先问我，装完告诉我结果。
+
+想用 GitHub 上的整包（方式二）：
 
 > 帮我装这个插件：`https://github.com/riceyu02/dsh-floatball-pet`
 > 用 Release **v0.1.0** 里的 `dsh-floatball-pet-0.1.0.tgz`，装进 `desktop` profile。
 > 需要放行构建脚本就先问我；装完告诉我结果。
-
-最省事的一条是走 npm（即方式四）：
-
-> 帮我装 npm 上的 `dsh-floatball-pet` 插件，装进 `desktop` profile；需要放行构建脚本先问我，装完告诉我结果。
 
 对方网络连不上 `github.com` 时，改成把 tgz 直接发给他：
 
