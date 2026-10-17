@@ -1,17 +1,19 @@
 name: publish-npm
 
-# Optional path for publishing the npm package through GitHub's OIDC trusted
-# publishing. The normal release is still: `npm stage publish` on the maintainer's
-# machine, then approve the staged package on npmjs.com.
+# Publish the npm package through GitHub's OIDC trusted publishing. A tag push stages
+# that version for approval; a maintainer approves it on npmjs.com (Staged Packages →
+# Approve). The trusted publisher must name this workflow: package page → Settings →
+# Trusted Publisher → GitHub Actions, workflow `publish-npm.yml`.
 #
-# This workflow runs only when started by hand, so a tag push never turns into a red
-# run while a trusted publisher is not configured. To use it, configure the trusted
-# publisher on npmjs.com (package page → Settings → Trusted Publisher → GitHub
-# Actions, workflow `publish-npm.yml`), then run this workflow on the release tag.
+# No manual `npm stage publish` is needed any more; running both for one version only
+# makes the second one fail because that version is already staged.
 #
 # The plugin is Windows-only — its native dependency declares `os: win32` — so the job
 # runs on Windows; an ubuntu runner cannot even complete `npm ci`.
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
