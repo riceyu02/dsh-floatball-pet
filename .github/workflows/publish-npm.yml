@@ -1,22 +1,17 @@
 name: publish-npm
 
-# The npm package is not the GitHub Release artifact: the Release carries the 114 MB
-# all-in-one bundle (runtime inside), while npm gets the 1.7 MB runtime-less package
-# whose `postinstall` assembles the runtime on the user's machine. Publishing them from
-# one tag keeps the version numbers in step.
+# Optional path for publishing the npm package through GitHub's OIDC trusted
+# publishing. The normal release is still: `npm stage publish` on the maintainer's
+# machine, then approve the staged package on npmjs.com.
 #
-# Authentication is npm trusted publishing (OIDC), so there is no token secret. Configure
-# it once on npmjs.com: package page → Settings → Trusted Publisher → GitHub Actions,
-# user `riceyu02`, repository `dsh-floatball-pet`, workflow `publish-npm.yml`. Trusted
-# publishers created after 2026-09-03 are set to allow `npm stage publish` only, which is
-# why this workflow stages the version and a maintainer approves it on npmjs.com
-# (Staged Packages → Approve). Tick "npm publish" in that config to publish directly.
+# This workflow runs only when started by hand, so a tag push never turns into a red
+# run while a trusted publisher is not configured. To use it, configure the trusted
+# publisher on npmjs.com (package page → Settings → Trusted Publisher → GitHub
+# Actions, workflow `publish-npm.yml`), then run this workflow on the release tag.
 #
-# See docs/npm-publish.md.
+# The plugin is Windows-only — its native dependency declares `os: win32` — so the job
+# runs on Windows; an ubuntu runner cannot even complete `npm ci`.
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -25,7 +20,7 @@ permissions:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -44,19 +39,13 @@ jobs:
 
       - name: Check that the tag matches package.json
         if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
+        shell: pwsh
         run: |
-          tag="${GITHUB_REF_NAME#v}"
-          version="$(node -p "require('./package.json').version")"
-          if [ "$tag" != "$version" ]; then
-            echo "tag v$tag does not match package.json version $version" >&2
-            exit 1
-          fi
+          $tag = '${{ github.ref_name }}'.TrimStart('v')
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($tag -ne $version) { throw "tag v$tag does not match package.json version $version" }
 
       # `prepare` runs while packing, but it recognises a working copy (a .git directory)
       # and skips the runtime assembly, so no Electron is downloaded here.
       - name: Stage the version for approval
         run: npm stage publish
-
-      # To publish without the manual approval step, allow "npm publish" on the trusted
-      # publisher and replace the command above with: npm publish --provenance
