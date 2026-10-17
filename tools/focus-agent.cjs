@@ -9,18 +9,13 @@
  * refuses it the WMI and shell escapes too — so the pet itself simply cannot
  * raise DSH's window.
  *
- * Something has to start this helper with a full token, and there are two such
- * places on purpose:
- *
- *   * `tools/launch.cjs` starts it *before* Electron, so it inherits the launcher's
- *     token — the best case, and the normal one when running from source.
- *   * the packaged app starts it itself (`dsh.startFocusAgent`), running Electron's
- *     own binary with `ELECTRON_RUN_AS_NODE=1`. A packaged build has no launcher at
- *     all, and without this the helper simply never existed — which is why clicking
- *     the ball did nothing at all in the shipped exe.
+ * Something has to start this helper with a full token: the packaged app starts it
+ * itself (`dsh.startFocusAgent`), running Electron's own binary with
+ * `ELECTRON_RUN_AS_NODE=1`. Before 0.1.0 the standalone launcher did this before
+ * Electron started; that launcher is gone now, so the app is the only starter.
  *
  * Either way it is the same process, and the pet asks it to do the focusing over
- * loopback HTTP. It holds no privileges the launcher did not already have.
+ * loopback HTTP. It holds no privileges the app did not already have.
  *
  * Endpoints (all require the X-Pet-Token header):
  *   POST /focus     -> { ok: boolean }   raise the DSH window

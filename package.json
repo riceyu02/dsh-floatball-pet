@@ -2,7 +2,7 @@
   "name": "dsh-floatball-pet",
   "productName": "DSH 悬浮球",
   "version": "0.1.0",
-  "description": "DeepSeek Harness 桌面悬浮球桌宠及可安装 DSH 插件：悬浮球 + 灵动岛（余额 / 运行时间）+ 设置面板，点击悬浮球唤起 DSH。",
+  "description": "DeepSeek Harness 悬浮球插件：悬浮球 + 灵动岛（余额 / 运行时间）+ 设置面板，点击悬浮球唤起 DSH。",
   "author": "Riceyu02",
   "license": "MIT",
   "homepage": "https://github.com/riceyu02/dsh-floatball-pet#readme",
@@ -40,9 +40,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "start": "electron .",
     "dev": "electron . --dev",
-    "pack": "node tools/assemble.cjs",
     "build:dsh-plugin": "node tools/build-dsh-plugin.cjs",
     "prepare": "node tools/prepare-install.cjs",
     "postinstall": "node tools/prepare-install.cjs",
@@ -56,7 +54,6 @@
     "tools/assemble.cjs",
     "tools/build-focus-dll.cjs",
     "tools/focus-agent.cjs",
-    "tools/launch.cjs",
     "src",
     "build/PetFocus.dll",
     "build/icon.ico",
@@ -99,37 +96,6 @@
   },
   "devDependencies": {
     "electron": "^33.2.0",
-    "electron-builder": "^26.15.3",
     "tar": "^7.5.22"
-  },
-  "build": {
-    "appId": "com.dsh.desktop-pet",
-    "productName": "DSH悬浮球",
-    "files": [
-      "src/**/*",
-      "tools/focus-agent.cjs",
-      "tools/launch.cjs",
-      "node_modules/**/*",
-      "package.json"
-    ],
-    "asarUnpack": [
-      "src/PetFocus.dll",
-      "node_modules/koffi/**/*",
-      "node_modules/@koromix/**/*"
-    ],
-    "directories": {
-      "output": "dist",
-      "buildResources": "build"
-    },
-    "win": {
-      "icon": "build/icon.ico",
-      "target": [
-        "portable"
-      ]
-    },
-    "portable": {
-      "artifactName": "DSH-floatball-portable.exe"
-    },
-    "asar": true
   }
 }

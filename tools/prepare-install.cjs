@@ -33,7 +33,7 @@
  * Whether this is an install rather than a working copy is decided by `.git`: pnpm
  * fetches a git dependency as a tarball snapshot (no `.git` directory, and the checkout
  * lives in pnpm's own build directory), so a checkout keeps the fast path —
- * `npm run pack` / `npm run build:dsh-plugin` assemble on purpose there. The same
+ * `npm run build:dsh-plugin` assembles on purpose there. The same
  * applies to a source archive downloaded from GitHub, which is also a fetch-and-run copy.
  *
  * One more thing an install has to survive: npm 11 blocks `postinstall` scripts by
@@ -361,7 +361,7 @@ function main() {
 
   if (mode !== '1' && fs.existsSync(path.join(ROOT, '.git'))) {
     log('working copy, skipping the runtime assembly.');
-    log('         run `npm run pack` (standalone app) or `npm run build:dsh-plugin` (installer) when you need it.');
+    log('         run `npm run build:dsh-plugin` when you need a self-contained installer.');
     return;
   }
 

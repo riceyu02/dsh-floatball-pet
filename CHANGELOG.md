@@ -4,6 +4,13 @@
 
 > 本文件只记录当前这条线（`dsh-floatball-pet`，版本号从 0.1.0 重新起算）。
 
+## 未发布
+
+- **变更**移除独立运行版，只保留 DSH 插件一种发行方式：删掉 `启动悬浮球.cmd`、`tools/launch.cjs`、
+  `npm start` / `npm run pack` 和 electron-builder 的 portable 配置。悬浮球本来就用自带的 Electron
+  运行时承载，所以包体几乎不变（npm 包少约 6 KB，Release 整包相同）。
+- **变更**开发调试入口改为 `npm run dev`，直接起 Electron 调界面，不经过 DSH。
+
 ## 0.1.0
 
 > 版本号重新起算：这是换到新仓库（`dsh-floatball-pet`）后的第一个发布，所以号比之前的 0.2.20 小。

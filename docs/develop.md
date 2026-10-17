@@ -1,17 +1,20 @@
 # 从源码运行 / 自己构建（开发用）
 
 给想改代码、或想验证未发布改动的人。普通安装看 README 的「方式一 / 方式二」就够了。
+本项目只以 **DSH 插件**形式发行，没有独立运行版；`npm run dev` 仅用于本地调界面。
 
-## 克隆并独立运行
+## 克隆并本地调试
 
 ```powershell
 git clone https://github.com/riceyu02/dsh-floatball-pet.git
 cd dsh-floatball-pet
-npm install        # Electron 下载慢就先设 $env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+npm install        # 下载 Electron；慢就先设 $env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+npm run dev        # 直接用 Electron 起悬浮球，只用于调界面
 ```
 
-然后双击 `启动悬浮球.cmd`（等同 `npm start`）。`npm install` 时 `prepare` / `postinstall` 钩子会认出
-这是工作副本（有 `.git`）并跳过运行时组装，所以不会白等，也不会重复下载 Electron。
+`npm run dev` 跑的是插件里同一个 Electron 程序，但**不经过 DSH**：偏好和日志写在
+`%APPDATA%\DSH 悬浮球\`，不碰 profile 里的数据。要看真实的插件行为（设置页、开机自启、
+更新检查），按 README 装一次插件再测。
 
 > `npm install` 会提示 `koffi` 有安装脚本（`cnoke … --prebuild`）要放行——**不用放行**。原生二进制来自
 > `@koromix/koffi-win32-x64`（预编译），`cnoke` 那步是给想现场自己编译的人准备的，跳过不影响功能。
@@ -23,7 +26,7 @@ npm run build:dsh-plugin     # 产出 artifacts\dsh-floatball-pet-<版本>.tgz�
 dsh plugin --profile desktop add "$PWD\artifacts\dsh-floatball-pet-0.1.0.tgz"
 ```
 
-`npm run pack` 只组装独立程序到 `dist\DSH悬浮球\`，不打包；`npm test` 跑单元测试。
+`npm test` 跑单元测试；`npm run build:dsh-plugin` 会顺带重新组装运行时，不需要额外命令。
 
 ## 直接从 git 安装（不推荐长期用）
 

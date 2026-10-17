@@ -6,10 +6,8 @@
 DeepSeek 余额、下面显示 DSH 运行时长（精确到秒），最右边一个齿轮；点齿轮从上方升起设置面板，
 拖滑块就能同时改悬浮球和灵动岛的大小。**单击悬浮球唤起 DSH 窗口**。
 
-两种跑法：
-
-- **DSH 插件（推荐）**：装进 profile，由 DSH 启动和回收；DSH 退出后悬浮球自动退出。
-- **独立 Electron 程序**：DSH 关掉或最小化到托盘，悬浮球仍可独立运行。
+只以 **DSH 插件**形式发行：装进 profile，由 DSH 启动和回收，DSH 退出后悬浮球自动退出。
+（不提供独立运行版。）
 
 | 待机 | 悬停展开灵动岛 | 点齿轮升起设置面板 |
 |---|---|---|
@@ -102,25 +100,12 @@ dsh plugin --profile desktop add "<tgz 所在目录>\dsh-floatball-pet-0.1.0.tgz
 dsh plugin --profile desktop remove dsh-floatball-pet
 ```
 
-### 插件模式的行为差异
+### 运行行为
 
 - DSH 启动时拉起悬浮球；插件卸载、禁用或 DSH 退出时关闭，不留孤儿进程。
-- 偏好和日志在 `<profile>\data\dsh-floatball-pet\`，与独立模式互不干扰。
+- 偏好和日志在 `<profile>\data\dsh-floatball-pet\`。
 - 设置面板不显示「开机自动启动」——开机启动由 DSH 负责。
 - 标准模式 5 秒内异常退出（沙箱起不来的机器）时，宿主会自动用 `--no-sandbox` 重试一次。
-
-## 独立运行（不装成插件）
-
-```powershell
-git clone https://github.com/riceyu02/dsh-floatball-pet.git
-cd dsh-floatball-pet
-npm install
-```
-
-双击 **`启动悬浮球.cmd`**（等同 `npm start`）：先起焦点帮手，再启动 Electron；4 秒内异常退出会自动
-换 `--no-sandbox` 重试。日志在 `%APPDATA%\DSH 悬浮球\pet-console.log`。
-
-> **路径保持纯英文**：含中文等非 ASCII 字符时 Chromium 沙箱会初始化失败，表现为进程一闪就没、日志不写。
 
 ## 数据从哪来
 
@@ -136,8 +121,7 @@ npm install
 | 现象 | 处理 |
 |---|---|
 | `npm install` 卡在 Electron 下载 | `$env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"; npm install` |
-| 双击启动器什么都没发生 | 路径含中文，或本机沙箱起不来；改用插件模式（会自动重试兼容模式） |
-| 日志说「找不到悬浮球运行时」 | 运行时没组装好：源码安装跑 `npm run pack`；插件安装若 pnpm 拦了构建脚本，放行后重装一次 |
+| 日志说「找不到悬浮球运行时」 | 运行时没组装好：插件安装时若 pnpm 拦了构建脚本，放行后重装一次 |
 | 单击悬浮球没反应 | 看 `pet.log` 的 `reason`；抢前台靠 `tools/focus-agent.cjs` 帮手，插件模式会自动拉起 |
 | 悬浮球周围有一圈黑框 | 已知的透明窗口合成问题，当前实现已规避；复现请附系统版本与显卡驱动 |
 
