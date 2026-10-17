@@ -86,21 +86,19 @@ cd "<DSH 安装目录>\resources\runtime\cli\bin"
 > [riceyu02/dsh-desktop-pet](https://github.com/riceyu02/dsh-desktop-pet) 保留作存档、不再更新。
 > 装过旧版的人：要按方式一或方式二重装一次才能跟到新仓库。
 
-装法一共四条，按省事程度排：
+装法就两条，按省事程度排：
 
 | 方式 | 需要什么 | 代价 |
 |---|---|---|
 | **方式一**（从 npm 装，插件页直接输入） | 能连 npm 源（国内选「中国大陆镜像源」）、放行一次构建脚本 | 1.7 MB 的包，装时**另下约 110 MB 的 Electron**；**唯一能在插件页里直接装的方式** |
 | **方式二**（Release 整包，或别人发你的 tgz） | 能拿到 `dsh-floatball-pet-0.1.0.tgz` | 约 114.5 MB，装完即用：不构建、**不下载 Electron**、不用放行构建脚本 |
-| **方式三**（git 仓库地址） | 能连 `github.com`、`git` 在 PATH、放行构建脚本 | 包里只有代码（约 1.7 MB），装时**另下约 110 MB 的 Electron**；换 commit 要重新放行一次 |
-| **方式四**（自己构建） | Node.js 22+，能连 `github.com` 与 npm 源 | `npm install` 之后自己跑一条打包命令；适合想改代码的人 |
 
-体积差在哪：**0.1.0 起，方式一和方式三装出来的包都不含 Electron**（`runtime/` 占了旧包的
-100%），改为安装时按需下载并缓存；而 Release 里那份是特意打进包的，给**装完即用、甚至离线**的场景。
-缓存规则见文末「运行时放在哪、什么时候下载」。
+体积差在哪：**方式一装出来的包不含 Electron**（`runtime/` 占了旧包的 100%），改为安装时按需下载并
+缓存；方式二那份是特意打进包的，给**装完即用、甚至离线**的场景。缓存规则见文末「运行时放在哪、
+什么时候下载」。
 
-**要发给别人，用方式二**——不依赖对方能否连 GitHub、也不用等他构建。想跟着源码走用方式三，
-代价是换一个 commit 就要重新放行一次。
+**要发给别人，用方式二**——不依赖对方能否连 GitHub、也不用等他构建。想改代码或从源码跑，见
+[docs/develop.md](docs/develop.md)。
 
 ### 方式一：从 npm 装（推荐，插件页里直接输入）
 
@@ -143,58 +141,6 @@ dsh plugin --profile desktop add "<tgz 所在目录>\dsh-floatball-pet-0.1.0.tgz
 > **把这个文件放在不会被清理的地方**：profile 的 `package.json` 会记成 `file:` 加这个路径，日后升级
 > 或重装还要回来找它。放在临时目录、或装完就删，之后就取不到源了。路径建议全英文。
 
-### 方式三：直接用 GitHub 仓库安装（不需要 Release）
-
-```powershell
-dsh plugin --profile desktop add git+https://github.com/riceyu02/dsh-floatball-pet.git#v0.1.0
-```
-
-前置条件：**`git` 必须在 PATH 上**（pnpm 靠它取仓库）。用 `git+https://…` 而不是 `github:` 简写
-——后者会被解析成 `git+ssh://git@github.com/…`，没有配 SSH key 的机器会直接
-`Host key verification failed`。
-
-**建议钉一个 tag（如上面的 `#v0.1.0`），不要跟着 `main` 走。** 原因见下：放行的键里带着 commit，
-跟 `main` 意味着插件每更新一次，装的人就要重新放行一次；钉 tag 则一个版本只需放行一次。
-
-这条路径不下载预编译包，而是在你机器上现装依赖、现组装 Electron 运行时——实测装完 `runtime\`
-目录占 273 MB（tgz 里已经装好的那一份解压出来也是这个数），加上下载和解压，要几分钟。
-第一次跑通常会在**构建脚本**这一步停下：pnpm 11 默认拦截依赖的构建脚本，并把它要求的那一行
-原样打印出来，例如
-
-```yaml
-allowBuilds:
-  "dsh-floatball-pet@https://codeload.github.com/riceyu02/dsh-floatball-pet/tar.gz/2f1a…": true
-```
-
-把这行照抄进 `<profile>\pnpm-workspace.yaml` 再跑一次。**注意键是「包名@pnpm 解析出的地址」，
-不是裸包名**——pnpm 对 git 依赖只认这个精确匹配（裸包名与通配符都不生效），而地址里带着它给
-这次抓取算的 commit，所以换一个 commit 就得换一行。DSH 插件页上也有对应的
-「允许这些脚本并重试」按钮。Electron 下载慢时先设 `$env:ELECTRON_MIRROR`，见「常见问题」。
-
-### 方式四：自己构建
-
-用 Node.js 22 或更高版本（`package.json` 的 `engines` 要求 `>=22`）：
-
-```powershell
-git clone https://github.com/riceyu02/dsh-floatball-pet.git
-cd dsh-floatball-pet
-npm install                      # 若 Electron 下载太慢，先设镜像，见「常见问题」
-npm run build:dsh-plugin         # 产出 artifacts\dsh-floatball-pet-<版本>.tgz
-dsh plugin --profile desktop add "$PWD\artifacts\dsh-floatball-pet-0.1.0.tgz"
-```
-
-`npm install` 时 `prepare` 与 `postinstall` 钩子**都会跳过运行时组装**——它们认得出这是工作副本
-（有 `.git`），组装只在你显式执行 `npm run pack`（独立程序用）或 `npm run build:dsh-plugin`
-（插件安装包用）时才做，所以不会白等，也不会重复下载 Electron。
-
-这条路**不需要等 pnpm 来拦构建脚本**：你是自己跑 `npm run build:dsh-plugin` 把包造出来的，
-最后那一步 `add` 喂给 DSH 的是一个已经造好的本地 tgz，走的就是方式二那条路。
-
-> **`npm install` 会提示 `koffi` 有安装脚本（`cnoke … --prebuild`）需要放行——不用放行。**
-> 包内自带的那个原生二进制来自 `@koromix/koffi-win32-x64`（预编译），`cnoke` 那一步是给
-> 想现场自己编译的人准备的，跳过它不影响任何功能。实测从零 `npm install koffi@3.3.1
-> @koromix/koffi-win32-x64@3.3.1`：两个包装好、二进制就位，只是打一条 allowScripts 提示。
-
 ### 让 DSH 的 AI 帮你装（把下面这段发给它就行）
 
 DSH 的 agent 手上有插件管理接口，能自己装完这一套：下载、登记 bundle、处理放行、校验装没装上。
@@ -219,17 +165,12 @@ DSH 的 agent 手上有插件管理接口，能自己装完这一套：下载、
 |---|---|
 | agent 走**应用内**插件管理接口（`plugin_manager`，Creator 模式默认启用） | 基本不用管：实测 `application: "applied"`，**不重启 DSH 也会当场生效**（旧实例退出、新实例自动拉起） |
 | agent 退回**命令行** `dsh plugin --profile desktop add …` | 装完必须**完全退出并重开 DSH** |
-| agent 装的是 **git 路线**（`git+https://…`） | 它会先问你是否放行构建脚本，之后**每换一个 commit 都要再问一次** |
 | agent 装的是 **npm 路线**（`dsh-floatball-pet`） | 它也会先问是否放行构建脚本；放行一次后同一版本重装不再问，换版本才再问 |
 | agent 的 shell 起不来（Windows 沙箱下 `pwsh` 可能直接起不来，退出码 `0xC0000142`） | 需要把该会话的文件权限放行到 `danger-full-access`，或让对方用 DSH 的插件页手动装 |
 
-两个提醒：
+一个提醒：
 
 - **确认包是从哪来的。** 让 AI 装插件 = 在那台机器上运行插件作者的代码，这正是 pnpm 要求 build 放行的原因。
-- **长期使用别把 git 依赖挂在 profile 上。** 实测：profile 里存在 git 依赖时，之后任何一次装包都会让 pnpm
-  重新解析它、重跑它的 `prepare`（可能再下一次 Electron）；而应用内安装用的是**净化过的环境**
-  （没有代理、没有 `ELECTRON_MIRROR`），这一步会静默卡到 DSH 的 10 分钟超时。尝鲜可以，长期建议换成
-  tarball：把 tgz 放进 `<profile>\plugin-tarballs\`，依赖写成 `file:` 形式（`dsh-orb` 就是这么放的）。
 
 ### 装上了吗
 
@@ -298,7 +239,7 @@ dsh-floatball-pet/
 ├── test/host.test.mjs           # 宿主插件的单元测试（node --test）
 ├── .github/workflows/           # release.yml（整包）+ publish-npm.yml（npm 包）
 ├── CHANGELOG.md                 # 更新日志（当前这条线）
-├── docs/                        # 三张状态截图、旧版本更新日志、发布到 npm 的步骤
+├── docs/                        # 三张状态截图、旧版更新日志、npm 发布与源码构建说明
 └── build/icon.ico               # 应用图标
 ```
 
