@@ -37,8 +37,8 @@
   本机 `~/.npmrc` 指向 npmmirror 也能发）。新增 **`postinstall`** 钩子——npm 不会为 registry 包执行
   `prepare`，少了它从 npm 装出来的插件就没有运行时；git 安装仍走 `prepare`，两个钩子是同一个脚本。
   **已发布 `0.1.0`**（2026-10-17，经 staged publishing 审核上线；npmjs 与 npmmirror 均可查）。
-  npm 已限制 bypass-2FA 的直接发布 token，后续发版走 staged publishing / trusted publishing，
-  步骤见 `docs/npm-publish.md`。
+  npm 已限制 bypass-2FA 的直接发布 token，后续发版走 staged publishing / trusted publishing
+  （维护者流程，不随仓库公开）。
 - **变更**安装时直接复用包里预编译的 `build/PetFocus.dll`，不再跑 PowerShell 的 `Add-Type`：
   这个 DLL 本来就是为了绕开"目标机器上编不了 C#"才存在的，安装过程不该又把它依赖回来。
   发版构建（`npm run build:dsh-plugin`）不受影响，照旧重新编译。
