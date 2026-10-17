@@ -3,6 +3,7 @@
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
 > 本文件只记录当前这条线（`dsh-floatball-pet`，版本号从 0.1.0 重新起算）。
+> 发布页用的精简摘要见 [RELEASE-NOTES.md](RELEASE-NOTES.md)。
 
 ## 未发布
 
