@@ -3,6 +3,17 @@
 给 GitHub Release 页面用的摘要。每个 `## <版本>` 一节对应同名 tag，发布时由
 `.github/workflows/release.yml` 原样取用；完整的技术细节见 [CHANGELOG.md](CHANGELOG.md)。
 
+## 0.2.1
+
+两个修复：
+
+- **设置页回来了**：npm 瘦包之前的包入口指向 Electron 的 `src/main.js`，DSH 宿主导入时找不到 `electron`，
+  「灵动岛悬浮球」这一行起不来。现在入口改成宿主安全的空模块，设置页正常显示。
+- **浏览器全屏视频不再被球挡住**：Chrome / Edge / Firefox、VLC、PotPlayer 等进入全屏时，悬浮球和遇到游戏一样
+  自动隐藏，退出全屏立刻回来。
+
+装完完全退出并重开 DSH。
+
 ## 0.2.0
 
 这一版的重点是更新变小：插件包不再自带 Electron，升级通常只下载约 1.7 MB，运行时复用本机缓存。

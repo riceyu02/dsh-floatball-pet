@@ -5,6 +5,14 @@
 > 本文件记录 `dsh-floatball-pet` 的版本变更。
 > 发布页用的精简摘要见 [RELEASE-NOTES.md](RELEASE-NOTES.md)。
 
+## 0.2.1
+
+- **修复**设置里不显示「灵动岛悬浮球」：设置行的宿主入口改到 `plugin/client-host.mjs`。npm 瘦包此前把包入口
+  `exports["."]` 指向 Electron 的 `src/main.js`，DSH 宿主进程导入时 `require('electron')` 直接抛错，整行没起来，
+  设置区也就不出现。
+- **修复**浏览器播放视频全屏时悬浮球仍置顶挡住画面：全屏判定新增浏览器与视频播放器名单（Chrome、Edge、Firefox、
+  VLC、PotPlayer、B 站/爱奇艺等客户端），它们无边框全屏时和游戏一样隐藏，退出全屏立即恢复。
+
 ## 0.2.0
 
 - **变更**移除独立运行版，只保留 DSH 插件一种发行方式：删掉 `启动悬浮球.cmd`、`tools/launch.cjs`、

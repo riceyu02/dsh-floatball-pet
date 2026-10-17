@@ -233,34 +233,33 @@ let topmostGuardTimer = null;
 let topmostSuppressed = false;
 
 /**
- * Which full-screen windows are games, and which are just full-screen.
+ * Full-screen windows split into two kinds: hide the pet, or leave it alone.
  *
- * Windows answers this for exclusive full screen only ("a full-screen Direct3D application
- * is running", the state it uses to suppress notifications). For borderless full screen —
- * how most games go full screen today — nothing in the system answers it, so the judgement
- * is: a borderless window covering the whole display is a game *unless* the program behind
- * it is one of the things people commonly run full screen without playing anything
- * (browsers, video players, slideshows, editors, terminals). A maximised window never
- * qualifies, so ordinary desktop use is untouched.
+ * Games hide it. So do browsers and video players: HTML5 full-screen video is just a
+ * borderless window over the whole display, and without this the topmost guardian puts
+ * the ball back on top of the video. Everything else in NOT_A_GAME (documents, editors,
+ * calls, DSH itself) is full screen because someone is working, and the pet stays.
  *
- * Both lists are configurable: `gameProcesses` / `ignoreProcesses` in the plugin's config
- * arrive here as environment variables.
+ * Windows answers "game" only for exclusive Direct3D full screen; borderless full
+ * screen is judged by geometry (see win32.fullscreenWindow).
  */
-const NOT_A_GAME = new Set([
-  // browsers, which is what F11 looks like
+const HIDE_ON_FULLSCREEN = new Set([
+  // browsers, including their built-in video full screen
   'chrome', 'msedge', 'firefox', 'brave', 'opera', 'vivaldi', 'iexplore', '360se',
-  '360chrome', 'qqbrowser', 'sogouexplorer',
+  '360chrome', 'qqbrowser', 'sogouexplorer', 'msedgewebview2',
+  // video players and streaming clients
+  'vlc', 'mpv', 'potplayer', 'potplayermini64', 'potplayer64', 'mpc-hc', 'mpc-hc64',
+  'wmplayer', 'bilibili', 'iqiyi', 'qqlive', 'youku', 'videoplayer',
+]);
+
+const NOT_A_GAME = new Set([
   // windows itself
   'explorer', 'applicationframehost', 'searchhost', 'startmenuexperiencehost',
   'shellexperiencehost', 'textinputhost', 'systemsettings', 'windowsterminal',
   'conhost', 'cmd', 'powershell', 'pwsh', 'mintty',
-  // video
-  'vlc', 'mpv', 'potplayer', 'potplayermini64', 'potplayer64', 'mpc-hc', 'mpc-hc64',
-  'wmplayer', 'foobar2000', 'bilibili', 'iqiyi', 'qqlive', 'youku', 'photos',
-  'microsoft.photos', 'videoplayer',
   // documents and slideshows
   'powerpnt', 'winword', 'excel', 'wpp', 'et', 'wps', 'acrord32', 'acrobat',
-  'sumatrapdf', 'foxitpdfreader', 'foxitreader',
+  'sumatrapdf', 'foxitpdfreader', 'foxitreader', 'photos', 'microsoft.photos',
   // editors and IDEs
   'code', 'devenv', 'idea64', 'pycharm64', 'webstorm64', 'sublime_text', 'notepad',
   'notepad++', 'gvim', 'vim',
@@ -282,19 +281,22 @@ function envNames(name) {
 const FORCED_GAMES = new Set(envNames('DSH_PET_GAME_PROCESSES'));
 for (const extra of envNames('DSH_PET_IGNORE_PROCESSES')) NOT_A_GAME.add(extra);
 
-/** @returns {{game: boolean, why: string}|null} */
+/** @returns {{hide: boolean, why: string}|null} */
 function judgeFullscreenWindow(full) {
   if (!full) return null;
   const name = full.processName || '';
-  if (name && FORCED_GAMES.has(name)) return { game: true, why: `${name} is on the game list` };
+  if (name && FORCED_GAMES.has(name)) return { hide: true, why: `${name} is on the game list` };
   if (win32.d3dFullscreenRunning()) {
-    return { game: true, why: 'Windows reports a full-screen Direct3D application' };
+    return { hide: true, why: 'Windows reports a full-screen Direct3D application' };
   }
   if (!full.borderless) {
-    return { game: false, why: `full-screen window with a frame (${name || full.className})` };
+    return { hide: false, why: `full-screen window with a frame (${name || full.className})` };
   }
-  if (name && NOT_A_GAME.has(name)) return { game: false, why: `${name} is not a game` };
-  return { game: true, why: `borderless full-screen ${name || full.className}` };
+  if (name && HIDE_ON_FULLSCREEN.has(name)) {
+    return { hide: true, why: `${name} is full screen (browser or video)` };
+  }
+  if (name && NOT_A_GAME.has(name)) return { hide: false, why: `${name} is not a game` };
+  return { hide: true, why: `borderless full-screen ${name || full.className}` };
 }
 let lastSizeTick = 0;
 let dragDirty = false;
@@ -1222,19 +1224,20 @@ function createWindow() {
         topmostGuardTimer.unref?.();
         return;
       }
-      // While any full-screen or borderless-full-screen window is on this display, the pet
-      // gets out of the way entirely — the window is hidden, not merely dropped out of the
-      // topmost band, so nothing of the ball shows over the game. Otherwise the ball is
-      // simply always on top. Geometry is the test (see win32.fullscreenWindow): a
-      // maximised window stops at the work area and does not count, a full-screen one
-      // includes the taskbar strip. The shell is skipped by class.
+      // While a full-screen game, browser video or other borderless full-screen window
+      // owns this display, the pet gets out of the way entirely — the window is hidden,
+      // not merely dropped out of the topmost band, so nothing of the ball shows over
+      // the video. Otherwise the ball is simply always on top. Geometry is the test (see
+      // win32.fullscreenWindow): a maximised window stops at the work area and does not
+      // count, a full-screen one includes the taskbar strip. The shell is skipped by
+      // class. docs/editors/calls are deliberately in NOT_A_GAME and keep the pet.
       const bounds = screen.getDisplayNearestPoint({
         x: Math.round(store.data.centerX || 0),
         y: Math.round(store.data.centerY || 0),
       }).bounds;
       const full = win32.fullscreenWindow(bounds, handle);
       const verdict = judgeFullscreenWindow(full);
-      const shouldHide = Boolean(verdict && verdict.game);
+      const shouldHide = Boolean(verdict && verdict.hide);
       if (shouldHide !== topmostSuppressed) {
         topmostSuppressed = shouldHide;
         log(shouldHide
