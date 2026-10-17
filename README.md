@@ -1,112 +1,62 @@
 # DSH 悬浮球桌宠（dsh-floatball-pet）
 
-> 由 [Riceyu02](https://github.com/riceyu02) 维护的第三方社区插件。本项目与 DeepSeek AI
-> 无隶属、认可或合作关系。
+> 由 [Riceyu02](https://github.com/riceyu02) 维护的第三方社区插件，与 DeepSeek 无隶属或合作关系。
 
-一个常驻桌面的**系统级悬浮球**：平时就是一颗小鲸鱼球，鼠标移上去**向右展开成灵动岛**——
-上方显示 DeepSeek 余额、下方显示 DSH 运行时长（精确到秒）、最右侧一个设置按钮；点设置按钮，
-**上方升起设置面板**，拖滑块就能同时改变悬浮球和灵动岛的大小。**单击悬浮球即可唤起
-DeepSeek Harness 窗口**。
+一颗常驻桌面的**系统级悬浮球**：平时是小鲸鱼球，鼠标移上去向右展开成**灵动岛**——上面显示
+DeepSeek 余额、下面显示 DSH 运行时长（精确到秒），最右边一个齿轮；点齿轮从上方升起设置面板，
+拖滑块就能同时改悬浮球和灵动岛的大小。**单击悬浮球唤起 DSH 窗口**。
 
-它有两种运行方式：
+两种跑法：
 
 - **DSH 插件（推荐）**：装进 profile，由 DSH 启动和回收；DSH 退出后悬浮球自动退出。
-- **独立 Electron 程序**：仓库里自带启动器；DSH 关掉或最小化到托盘，悬浮球仍可独立运行。
+- **独立 Electron 程序**：DSH 关掉或最小化到托盘，悬浮球仍可独立运行。
 
 | 待机 | 悬停展开灵动岛 | 点齿轮升起设置面板 |
 |---|---|---|
 | ![待机](docs/01-idle.png) | ![悬停](docs/02-hover.png) | ![设置](docs/03-panel.png) |
 
-```
-         ┌─────────────────────────────┐
-         │  悬浮球设置                  │
-         │                             │  ← 点齿轮后从上方升起
-         │  悬浮球大小          56 px  │
-         │  ●━━━━━━━━━━━━━━━━━━━━━━━   │  ← 拖动即实时缩放
-         │  灵动岛会随悬浮球一起缩放    │
-         │                             │
-         │  不透明度            100%   │
-         │  ●━━━━━━━━━━━━━━━━━━━━━━━   │
-         │  ○── 开机自动启动            │
-         │  [ 打开 DSH ]   [ 退出 ]     │
-         └─────────────────────────────┘
-   ╭───────╮
-   │🐋     │ 余额 ¥6.77              │  ← 悬停时向右展开成灵动岛
-   ╰───────┤ 运行 5时 46分 33秒   ⚙  │
-           ╰─────────────────────────╯
-```
-
----
-
 ## 功能
 
 | 能力 | 说明 |
 |---|---|
-| **悬浮球** | 无边框、透明、置顶、不占任务栏；可任意拖动，位置自动记忆 |
-| **灵动岛** | 鼠标移入球体 → 向右展开（贴近屏幕右侧时自动改为**向左展开**） |
-| **余额** | 实时读取 DeepSeek 账户余额，变化时数字有一次高亮闪烁 |
-| **运行时间** | **精确到秒**，每秒自增；DSH 未运行时显示「未运行」 |
-| **设置面板** | 点灵动岛内侧的齿轮，面板从上方升起（贴近屏幕顶部时改为下方） |
-| **大小滑块** | 拖动即改悬浮球直径（40–96 px），灵动岛、字号、齿轮同步等比缩放 |
-| **唤起 DSH** | 单击悬浮球：DSH 在运行就把窗口拉到最前（最小化也会还原），否则启动它 |
-| **自定义图标** | 可换成 GIF 动图或 PNG / JPG / WebP / BMP，随时一键恢复默认立绘 |
-| **游戏让位** | 检测到**游戏**全屏 / 无边框全屏时自动隐藏悬浮球，退出全屏立刻回来。独占全屏由系统识别；无边框全屏按"无边框 + 占满整屏"判定，浏览器 F11、播放器、最大化窗口都不会误判（判定依据与可配置名单见下文） |
+| **悬浮球** | 无边框、透明、置顶、不占任务栏；可拖动，位置自动记忆 |
+| **灵动岛** | 鼠标移入向右展开（贴近屏幕右侧时改为向左） |
+| **余额** | 实时读取 DeepSeek 余额，变化时数字高亮闪一下；悬停不额外请求 |
+| **运行时间** | 精确到秒，每秒自增；DSH 未运行时显示「未运行」 |
+| **设置面板** | 点齿轮从上方升起（贴近顶部时改为下方）；大小、不透明度拖滑块即时生效 |
+| **唤起 DSH** | 单击悬浮球：DSH 在运行就把窗口拉到最前（最小化也还原），否则启动它 |
+| **自定义图标** | 可换 GIF 动图或 PNG/JPG/WebP/BMP，一键恢复默认立绘 |
+| **游戏让位** | 检测到游戏全屏 / 无边框全屏时自动隐藏，退出全屏立刻回来；浏览器 F11、播放器不会误判 |
+| **托盘与自启** | 托盘菜单可显示悬浮球、打开 DSH、切换大小、退出；插件模式下的「开机自启」等于让 DSH 开机启动 |
 | **版本更新** | DSH 设置 →「灵动岛悬浮球」里检查更新并一键升级（装完重启 DSH） |
-| **托盘** | 托盘菜单可显示悬浮球、打开 DSH、快速切换大小、退出 |
-| **开机自启** | DSH 设置 →「灵动岛悬浮球」里的开关（插件模式下等于让 DSH 开机启动；独立模式仍是面板里的开关） |
-
----
 
 ## 安装：作为 DSH 插件
 
-需要 Windows 10/11 与已安装的 DeepSeek Harness。下面命令里的 `dsh` 指桌面版自带的 CLI，它在：
+需要 Windows 10/11 与已安装的 DeepSeek Harness。下文 `dsh` 指桌面版自带的 CLI：
 
 ```text
 <DSH 安装目录>\resources\runtime\cli\bin\dsh.cmd
 ```
 
-它默认**不在 PATH 上**，所以先挑一种叫法（下文统一写成 `dsh`，你替换成自己选的那种）：
+它默认不在 PATH 上，用完整路径调用即可；`--profile desktop` 是桌面版实际使用的 profile，**不要改**。
 
-```powershell
-# 1) 已经把它加进了 PATH，直接用
-dsh plugin --profile desktop add <参数>
+> 本项目原名 `dsh-desktop-pet`，仓库已迁到
+> [riceyu02/dsh-floatball-pet](https://github.com/riceyu02/dsh-floatball-pet)，旧仓库仅作存档。
+> 装过 0.2.x 的需按下面任一方式重装一次。
 
-# 2) 用完整路径调用（把 <DSH 安装目录> 换成真实目录，例如 D:\DeepSeekHarness）
-& "<DSH 安装目录>\resources\runtime\cli\bin\dsh.cmd" plugin --profile desktop add <参数>
+装法就两条：
 
-# 3) 或先切到它所在目录，再用相对路径
-cd "<DSH 安装目录>\resources\runtime\cli\bin"
-.\dsh.cmd plugin --profile desktop add <参数>
-```
-
-`--profile desktop` 是桌面版实际使用的 profile 名，**不要改**。
-
-> **改过名。** 这个项目原本叫 `dsh-desktop-pet`，仓库已迁到
-> [riceyu02/dsh-floatball-pet](https://github.com/riceyu02/dsh-floatball-pet)，旧的
-> [riceyu02/dsh-desktop-pet](https://github.com/riceyu02/dsh-desktop-pet) 保留作存档、不再更新。
-> 装过旧版的人：要按方式一或方式二重装一次才能跟到新仓库。
-
-装法就两条，按省事程度排：
-
-| 方式 | 需要什么 | 代价 |
+| 方式 | 适合 | 代价 |
 |---|---|---|
-| **方式一**（从 npm 装，插件页直接输入） | 能连 npm 源（国内选「中国大陆镜像源」）、放行一次构建脚本 | 1.7 MB 的包，装时**另下约 110 MB 的 Electron**；**唯一能在插件页里直接装的方式** |
-| **方式二**（Release 整包，或别人发你的 tgz） | 能拿到 `dsh-floatball-pet-0.1.0.tgz` | 约 114.5 MB，装完即用：不构建、**不下载 Electron**、不用放行构建脚本 |
+| **方式一**（npm，插件页直接输入） | 大多数人；唯一能在插件页里直接装的方式 | 1.7 MB 的包，装时另下约 110 MB 的 Electron，要放行一次构建脚本 |
+| **方式二**（Release 整包） | 发给别人，或离线 / 连不上 GitHub | 约 114.5 MB，装完即用；不下载、不放行 |
 
-体积差在哪：**方式一装出来的包不含 Electron**（`runtime/` 占了旧包的 100%），改为安装时按需下载并
-缓存；方式二那份是特意打进包的，给**装完即用、甚至离线**的场景。缓存规则见文末「运行时放在哪、
-什么时候下载」。
+### 方式一：从 npm 装（推荐）
 
-**要发给别人，用方式二**——不依赖对方能否连 GitHub、也不用等他构建。想改代码或从源码跑，见
-[docs/develop.md](docs/develop.md)。
+<https://www.npmjs.com/package/dsh-floatball-pet>
 
-### 方式一：从 npm 装（推荐，插件页里直接输入）
-
-包名 **`dsh-floatball-pet`**，发布在 npmjs 上：<https://www.npmjs.com/package/dsh-floatball-pet>。
-
-**在 DSH 插件页里**：设置 → 插件 → 添加插件 → 输入 `dsh-floatball-pet` →
-安装源选「中国大陆镜像源」→ 安装。这个面板里只有 npm 包名会走镜像源，GitHub 地址和 `.tgz`
-直链都会绕过它。
+**插件页**：设置 → 插件 → 添加插件 → 输入 `dsh-floatball-pet` → 安装源选「中国大陆镜像源」→ 安装。
+这个面板只有 npm 包名会走镜像源，GitHub 地址和 `.tgz` 直链都会绕过它。
 
 **命令行等价**：
 
@@ -114,71 +64,39 @@ cd "<DSH 安装目录>\resources\runtime\cli\bin"
 dsh plugin --profile desktop add dsh-floatball-pet
 ```
 
-第一次装会停在**构建脚本**这一步：包里的 `postinstall` 要在你机器上下载、校验、组装 Electron
-运行时（约 110 MB），pnpm 11 默认不放行。插件页上点「允许这些脚本并重试」；命令行就把 pnpm
-打印的那行加进 `<profile>\pnpm-workspace.yaml`（键是 `dsh-floatball-pet@0.1.0`）再跑一次。
-同一版本重装不再问，只有**换版本**才需要再放行。
+第一次会停在**构建脚本**：包里的 `postinstall` 要在你机器上下载、校验、组装 Electron（约 110 MB），
+pnpm 11 默认不放行。插件页点「允许这些脚本并重试」；命令行就把 pnpm 打印的那行加进
+`<profile>\pnpm-workspace.yaml`（键是 `dsh-floatball-pet@0.1.0`）再跑一次。同一版本重装不再问。
 
-装完 **完全退出并重开 DSH**。运行时装在包外，缓存规则见文末。
+装完**完全退出并重开 DSH**。
 
-### 方式二：用 Release 整包（自己下，或别人发你）
+### 方式二：用 Release 整包
 
-包名固定 `dsh-floatball-pet-<版本>.tgz`，当前发布版是 `dsh-floatball-pet-0.1.0.tgz`，约 114.5 MB，
-**内含运行时**，装完即用、甚至离线。拿到文件的两条路，任选：
-
-- **自己下**：[Releases](https://github.com/riceyu02/dsh-floatball-pet/releases) 页面点
-  `dsh-floatball-pet-0.1.0.tgz`；或命令行
-  `curl.exe -L -o "$env:USERPROFILE\Downloads\dsh-floatball-pet-0.1.0.tgz" https://github.com/riceyu02/dsh-floatball-pet/releases/download/v0.1.0/dsh-floatball-pet-0.1.0.tgz`。
-  `curl.exe` 不走系统代理，只有浏览器配了代理的机器会很慢或失败，那就用浏览器下。
-- **别人发你**：微信 / 网盘 / 邮件附件都行。
-
-然后用本地路径装：
+包名 `dsh-floatball-pet-<版本>.tgz`（当前 0.1.0，约 114.5 MB，内含运行时）。从
+[Releases](https://github.com/riceyu02/dsh-floatball-pet/releases) 下载，或用别人发你的文件：
 
 ```powershell
 dsh plugin --profile desktop add "<tgz 所在目录>\dsh-floatball-pet-0.1.0.tgz"
 ```
 
-> **把这个文件放在不会被清理的地方**：profile 的 `package.json` 会记成 `file:` 加这个路径，日后升级
-> 或重装还要回来找它。放在临时目录、或装完就删，之后就取不到源了。路径建议全英文。
+> 这个文件别放临时目录：profile 会把它记成 `file:` 路径，日后升级或重装还要回来找。路径建议全英文。
 
-### 让 DSH 的 AI 帮你装（把下面这段发给它就行）
+### 让 AI 帮你装
 
-DSH 的 agent 手上有插件管理接口，能自己装完这一套：下载、登记 bundle、处理放行、校验装没装上。
+把这句话连同链接发给对方的 DSH：
 
-最省事的一条是走 npm（方式一）：
+> 帮我装 `dsh-floatball-pet`（npm 包），装进 `desktop` profile；需要放行构建脚本先问我，装完告诉我结果。
 
-> 帮我装 npm 上的 `dsh-floatball-pet` 插件，装进 `desktop` profile；需要放行构建脚本先问我，装完告诉我结果。
+对方网络连不上 GitHub 时，直接把 tgz 发给他：
 
-想用 GitHub 上的整包（方式二）：
+> 这是我给你的插件包 `dsh-floatball-pet-0.1.0.tgz`，帮我装进 `desktop` profile。
 
-> 帮我装这个插件：`https://github.com/riceyu02/dsh-floatball-pet`
-> 用 Release **v0.1.0** 里的 `dsh-floatball-pet-0.1.0.tgz`，装进 `desktop` profile。
-> 需要放行构建脚本就先问我；装完告诉我结果。
+走应用内 `plugin_manager` 装的通常**当场生效**；退回命令行 `dsh plugin add` 的必须**完全退出并重开 DSH**。
 
-对方网络连不上 `github.com` 时，改成把 tgz 直接发给他：
+### 装上了吗 / 卸载
 
-> 这是我给你的插件包 `dsh-floatball-pet-0.1.0.tgz`（DSH 悬浮球桌宠），帮我装进 `desktop` profile。
-
-会发生什么：
-
-| 情形 | 需要人做的事 |
-|---|---|
-| agent 走**应用内**插件管理接口（`plugin_manager`，Creator 模式默认启用） | 基本不用管：实测 `application: "applied"`，**不重启 DSH 也会当场生效**（旧实例退出、新实例自动拉起） |
-| agent 退回**命令行** `dsh plugin --profile desktop add …` | 装完必须**完全退出并重开 DSH** |
-| agent 装的是 **npm 路线**（`dsh-floatball-pet`） | 它也会先问是否放行构建脚本；放行一次后同一版本重装不再问，换版本才再问 |
-| agent 的 shell 起不来（Windows 沙箱下 `pwsh` 可能直接起不来，退出码 `0xC0000142`） | 需要把该会话的文件权限放行到 `danger-full-access`，或让对方用 DSH 的插件页手动装 |
-
-一个提醒：
-
-- **确认包是从哪来的。** 让 AI 装插件 = 在那台机器上运行插件作者的代码，这正是 pnpm 要求 build 放行的原因。
-
-### 装上了吗
-
-- `<profile>\package.json` 的 `dsh.profile.bundles` 里会出现 `dsh-floatball-pet`；
-- 重启 DSH 后桌面出现小鲸鱼球；
-- 插件模式的日志与偏好在 `<profile>\data\dsh-floatball-pet\`（`pet.log` 先看这个）。
-
-### 卸载
+装上后：`<profile>\package.json` 的 `dsh.profile.bundles` 里出现 `dsh-floatball-pet`；重启 DSH 后桌面
+出现小鲸鱼球；日志与偏好在 `<profile>\data\dsh-floatball-pet\`（先看 `pet.log`）。
 
 ```powershell
 dsh plugin --profile desktop remove dsh-floatball-pet
@@ -186,136 +104,79 @@ dsh plugin --profile desktop remove dsh-floatball-pet
 
 ### 插件模式的行为差异
 
-- DSH 启动时自动拉起悬浮球；插件卸载、禁用或 DSH 退出时自动关闭，不留孤儿进程。
-- 偏好和日志写入 `<profile>\data\dsh-floatball-pet\`，与独立模式互不干扰。
-- 设置面板不再显示「开机自动启动」——开机启动由 DSH 自己负责。
-- 标准模式若在 5 秒内异常退出（Chromium 沙箱起不来的机器），宿主会自动用
-  `--no-sandbox` 兼容模式重试一次。
-
----
+- DSH 启动时拉起悬浮球；插件卸载、禁用或 DSH 退出时关闭，不留孤儿进程。
+- 偏好和日志在 `<profile>\data\dsh-floatball-pet\`，与独立模式互不干扰。
+- 设置面板不显示「开机自动启动」——开机启动由 DSH 负责。
+- 标准模式 5 秒内异常退出（沙箱起不来的机器）时，宿主会自动用 `--no-sandbox` 重试一次。
 
 ## 独立运行（不装成插件）
 
 ```powershell
+git clone https://github.com/riceyu02/dsh-floatball-pet.git
+cd dsh-floatball-pet
 npm install
 ```
 
-双击 **`启动悬浮球.cmd`**（等同 `npm start`）。它会先起焦点帮手，用标准模式启动 Electron，
-4 秒后若进程已经没了（说明本机 Chromium 沙箱起不来），自动改用 `--no-sandbox` 重试一次。
-日志在 `%APPDATA%\DSH 悬浮球\pet-console.log`。
+双击 **`启动悬浮球.cmd`**（等同 `npm start`）：先起焦点帮手，再启动 Electron；4 秒内异常退出会自动
+换 `--no-sandbox` 重试。日志在 `%APPDATA%\DSH 悬浮球\pet-console.log`。
 
-> **路径请保持纯英文。** 安装路径含中文等非 ASCII 字符时，Chromium 沙箱一定初始化失败；
-> 表现是进程一闪就没、日志一个字节都不写。
-
----
+> **路径保持纯英文**：含中文等非 ASCII 字符时 Chromium 沙箱会初始化失败，表现为进程一闪就没、日志不写。
 
 ## 数据从哪来
 
-**余额**按优先级依次尝试，任何一步失败都自动降级，不会显示成 0：
+**余额**按顺序尝试，失败自动降级，不会显示成 0：DSH 登录态（读 `$DSH_HOME/.credentials.yaml`）→
+`DEEPSEEK_API_KEY` → 离线兜底（鲸鱼挂件账本里的上次观测值，标注「离线」）。启动时刷新一次，之后每
+5 分钟一次；**只读**、只发往 DeepSeek 官方域名，不会改动 DSH 的任何凭据。
 
-1. **DSH 登录态（零配置）** —— 读 `$DSH_HOME/.credentials.yaml` 的授权 token，请求
-   `https://platform.deepseek.com/api/v0/users/get_user_summary`，请求头与 DSH 自己一致。
-2. **`DEEPSEEK_API_KEY`** —— 有平台 key 时改用 `https://api.deepseek.com/user/balance`。
-3. **离线兜底** —— 都拿不到时退回鲸鱼挂件账本里的上次观测值，并标注「离线」。
-
-刷新：启动一次、每 5 分钟一次；悬停不会额外请求。余额只读、只发往上面写死的官方域名，
-**不会修改或清除 DSH 的任何凭据**。
-
-**运行时间**：先 TCP 连 DSH 的 Web 端口判断存活（纯 Node，不起子进程），再用 PowerShell
-取 `DeepSeek Harness` 进程里最早的 `StartTime` 作为起始时刻；每 15 秒刷新，界面每秒重绘。
-
----
-
-## 目录结构
-
-```text
-dsh-floatball-pet/
-├── package.json                 # Electron 应用元数据 + DSH bundle 声明 + npm 发布配置
-├── cordis.patch.yml             # 把宿主生命周期插件插入 DSH 配置树
-├── plugin/host.mjs              # 启动/停止 helper、沙箱回退、DSH 父进程看门狗
-├── 启动悬浮球.cmd                # 独立模式启动器
-├── src/                         # Electron 应用（主进程 / 渲染进程 / 托盘 / 图标）
-├── tools/                       # 构建与运维脚本（组装运行时、打包插件、发布 Release）
-├── test/host.test.mjs           # 宿主插件的单元测试（node --test）
-├── .github/workflows/           # release.yml（整包）+ publish-npm.yml（npm 包）
-├── CHANGELOG.md                 # 更新日志（当前这条线）
-├── docs/                        # 三张状态截图、旧版更新日志、npm 发布与源码构建说明
-└── build/icon.ico               # 应用图标
-```
-
-安装后插件包里的 `runtime/` 是组装好的 Electron 运行时，由 `tools/assemble.cjs` 生成，
-**不进入 git 仓库**。
-
----
+**运行时间**：TCP 连 DSH 的 Web 端口判断存活，再取 `DeepSeek Harness` 进程最早的 `StartTime`；
+每 15 秒刷新，界面每秒重绘。
 
 ## 常见问题
 
 | 现象 | 处理 |
 |---|---|
-| `npm install` 卡在 Electron 下载 | `$env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"; npm install`；npm 11 若提示 `allowScripts`，补跑 `node node_modules/electron/install.js` |
-| 双击启动器什么都没发生 | 路径含非 ASCII 字符，或本机沙箱起不来；改用 `dsh plugin` 的插件模式（会自动重试兼容模式） |
-| 日志说「找不到悬浮球运行时」 | `runtime/` 没组装好。源码安装执行 `npm run pack`；插件安装若被 pnpm 拦下了构建脚本（`ERR_PNPM_IGNORED_BUILDS`，`prepare`/`postinstall` 没执行），先放行再装一次 |
-| 单击悬浮球没反应 | 看 `pet.log` 里的 `reason`；受限令牌下抢前台靠 `tools/focus-agent.cjs` 帮手，插件模式会在启动时自动拉起它 |
-| 悬浮球周围有一圈黑框 | 属已知的透明窗口合成问题，当前实现已规避；若复现请附上系统版本与显卡驱动 |
-
----
+| `npm install` 卡在 Electron 下载 | `$env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"; npm install` |
+| 双击启动器什么都没发生 | 路径含中文，或本机沙箱起不来；改用插件模式（会自动重试兼容模式） |
+| 日志说「找不到悬浮球运行时」 | 运行时没组装好：源码安装跑 `npm run pack`；插件安装若 pnpm 拦了构建脚本，放行后重装一次 |
+| 单击悬浮球没反应 | 看 `pet.log` 的 `reason`；抢前台靠 `tools/focus-agent.cjs` 帮手，插件模式会自动拉起 |
+| 悬浮球周围有一圈黑框 | 已知的透明窗口合成问题，当前实现已规避；复现请附系统版本与显卡驱动 |
 
 ## 致谢
 
-- **[DeepSeek Harness](https://github.com/deepseekharness)**（DSH）——本插件跑在它的插件系统上：
-  宿主半边由 DSH 以 bundle patch 装载，设置页走它的客户端 Slot（`settings.section`）与 `webServer`
-  路由，桌面窗口由它拉起与回收。没有 DSH 就没有这个插件。
-- **提 issue 与帮忙实测的朋友**——置顶闪烁、按 Win 键后球不回来、自动更新失败、拖动沉底、
-  全屏切换后卡死这些 bug 都是实测报上来的，修复依据（含他们的测量数据）都记在
-  [CHANGELOG.md](CHANGELOG.md) 里（改名前的 0.2.x 记录在
-  [docs/CHANGELOG-0.2.x.md](docs/CHANGELOG-0.2.x.md)）。
-
-> 说明：本项目是**第三方社区插件**，与 DeepSeek 官方无隶属或合作关系；致谢仅表示对平台与
-> 反馈者的感谢。
-
----
+- **[DeepSeek Harness](https://github.com/deepseekharness)** —— 插件系统、设置页 Slot、`webServer`
+  路由与窗口生命周期都由它提供。
+- 提 issue 与帮忙实测的朋友 —— 置顶闪烁、按 Win 键球不回来、拖动沉底、全屏切换卡死等修复都来自
+  他们的实测数据，见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 许可证
 
-项目原创代码使用 [MIT License](LICENSE)。Electron、Chromium 与美术素材的说明见
-[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。美术素材允许随本应用及其插件包公开分发，
-但不包含在 MIT 授权范围内，也不授权脱离本应用单独复用。
-
-## 更新插件时的一个坑（0.1.0 起已解决）
-
-0.2.20 及更早的版本把运行时放在包目录里，悬浮球（以及托盘退出带不走的**焦点帮手**进程）运行时
-会锁住那些文件，pnpm 替换时报 `ERR_PNPM_EPERM ... runtime`——那时升级前必须先退出悬浮球，并确认
-没有 `DSH悬浮球` 进程残留。
-
-**0.1.0 起运行时落在包外**（`<DSH_HOME>\dsh-floatball-pet\runtime\<electron 版本>\`，见文末
-「运行时放在哪、什么时候下载」），pnpm 碰不到正在运行的 exe，升级前不必再退出悬浮球。唯一还要
-记得的是：同一个包换版本后 DSH 会报 `restart-required`，新代码要重启才加载。
+原创代码 [MIT License](LICENSE)；Electron、Chromium 与美术素材的说明见
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。美术素材可随本应用及其插件包分发，但不属于 MIT
+授权，也不授权脱离本应用单独复用。
 
 ## 运行时放在哪、什么时候下载
 
-0.1.0 起，插件包本身不含 Electron（`runtime/` 是个 269 MB 的 Electron 副本，占了整包的 100%）。
-安装时由 `tools/prepare-install.cjs` 组装（git 安装走 `prepare`，npm 安装走 `postinstall`，是同一个
-脚本），落在**包外**的版本化缓存里：
+安装时组装（npm 走 `postinstall`，git 走 `prepare`，同一个脚本），落在**包外**的版本化缓存：
 
 ```text
 <DSH_HOME>\dsh-floatball-pet\
 ├── downloads\              # 下载的 Electron 压缩包与解压结果，可整个删掉
-└── runtime\<electron 版本>\ # 组装好的运行时；含 .ready.json 标记
+└── runtime\<electron 版本>\ # 组装好的运行时，含 .ready.json
 ```
 
 | 情形 | 会发生什么 |
 |---|---|
-| 全新安装 | 下载 Electron（约 110 MB）→ 校验 SHA-256 → 解压 → 组装，约 10–40 秒 |
-| **升级插件版本**（如 0.1.0 → 0.1.1） | **什么都不做**，缓存命中，实测 0.09 秒、零下载 |
-| 升级到新的 Electron 版本 | 新版本有自己的目录，需再下载一次；旧目录可手动删除 |
-| 装了自带运行时的整包 | 包内 `runtime/` 优先，缓存完全不参与 |
+| 全新安装 | 下载约 110 MB → SHA-256 校验 → 解压组装，约 10–40 秒 |
+| 升级插件版本 | 缓存命中，什么都不做（实测 0.09 秒、零下载） |
+| 换 Electron 版本 | 新版本单独一个目录，需再下一次；旧目录可删 |
+| 装 Release 整包 | 包内 `runtime/` 优先，缓存不参与 |
 
-下载顺序是 `cdn.npmmirror.com` → GitHub Releases，两者都用该版本自己发布的 `SHASUMS256.txt`
-校验（实测三个源的校验和完全一致）。想换源或走自建镜像：
+下载源是 `cdn.npmmirror.com` → GitHub Releases，两边都用该版本的 `SHASUMS256.txt` 校验。要换源：
 
 ```powershell
 $env:DSH_PET_ELECTRON_MIRROR = "https://your-mirror.example.com/electron/v{version}"
 ```
 
-`{version}` 会被替换成 Electron 版本号。删掉整个 `<DSH_HOME>\dsh-floatball-pet\` 即可让下次安装
-重新下载一份干净的。
+`{version}` 替换成 Electron 版本号；删掉整个 `<DSH_HOME>\dsh-floatball-pet\` 就会重新下载。
+
+> 换版本后 DSH 会报 `restart-required`，重启即加载新代码，悬浮球不用退出。
