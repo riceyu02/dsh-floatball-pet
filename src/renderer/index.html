@@ -26,7 +26,6 @@
           <output id="sizeOut" for="size">56 px</output>
         </div>
         <input id="size" type="range" min="40" max="96" step="2" value="56" />
-        <p class="hint">灵动岛会随悬浮球一起缩放</p>
       </div>
 
       <div class="field">
@@ -36,8 +35,6 @@
         </div>
         <input id="opacity" type="range" min="35" max="100" step="5" value="100" />
       </div>
-
-      <p id="dshManagedHint" class="hint" hidden>由 DSH 插件管理：开关和版本更新都在 DSH 设置 →「灵动岛悬浮球」里。</p>
 
       <label class="switch-row">
         <input id="pinIsland" type="checkbox" />
@@ -53,9 +50,28 @@
         </div>
         <div class="btn-row">
           <button id="pickBallImage" class="ghost-btn" type="button">选择图片…</button>
-          <button id="clearBallImage" class="ghost-btn" type="button">恢复默认</button>
+          <button id="clearBallImage" class="ghost-btn" type="button" disabled>恢复默认</button>
         </div>
-        <p class="hint">支持 GIF 动图与 PNG / JPG / WebP / BMP；图片会填满整个球，所以正方形效果最好</p>
+
+        <!-- 图标栏下面常驻的圆形取景框：拖动和缩放改的就是悬浮球上看到的那一块。
+             预览本身是正圆（宽高相等 + border-radius:50%），图片由 pet.js 按
+             cover 关系铺满，永远盖住圆的边界。 -->
+        <div class="crop-editor" id="ballCrop" aria-disabled="true">
+          <div class="crop-circle" id="cropCircle" title="拖动图片调整位置"
+               style="width:92px;height:92px;border-radius:50%;clip-path:circle(50% at 50% 50%);overflow:hidden;position:relative;">
+            <img id="cropImage" src="assets/avatar.png" alt="" draggable="false" />
+          </div>
+          <div class="crop-side">
+            <div class="crop-row">
+              <label for="cropScale">缩放</label>
+              <output id="cropScaleOut" for="cropScale">1.00×</output>
+            </div>
+            <input id="cropScale" type="range" min="1" max="4" step="0.05" value="1" disabled />
+            <button id="cropReset" class="crop-reset" type="button" disabled>居中</button>
+            <p class="hint" id="cropHint">选择图片后可拖动和缩放</p>
+          </div>
+        </div>
+        <p class="hint">支持 GIF 动图与 PNG / JPG / WebP / BMP</p>
       </div>
 
       <div class="panel-foot">
@@ -67,7 +83,8 @@
     <!-- 悬浮球 + 灵动岛 -->
     <div id="pet" class="pet">
       <div id="capsule" class="capsule" data-hit>
-        <div class="orb" id="orb">
+        <div class="orb" id="orb"
+             style="border-radius:50%;clip-path:circle(50% at 50% 50%);overflow:hidden;">
           <img class="avatar" id="avatar" src="assets/avatar.png" alt="" draggable="false" />
           <span class="pulse" aria-hidden="true"></span>
         </div>

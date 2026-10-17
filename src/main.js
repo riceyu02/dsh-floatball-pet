@@ -321,6 +321,8 @@ let renderedSize = store.data.ballSize;
  */
 let islandOpen = false;
 let panelOpen = false;
+/** True while the pointer is dragging inside the panel (see pet:panel-busy). */
+let panelBusy = false;
 let pointerInteractive = null;
 let dragging = false;
 let lastPollLog = 0;
@@ -857,7 +859,7 @@ function pollCursorOnce() {
   // round. The island is what the panel hangs off, so collapsing it first left the
   // panel floating with nothing behind it — and the two had independent timers, so
   // that is exactly what happened on the way out.
-  if (engaged) {
+  if (engaged || panelBusy) {
     outsideSince = 0;
     if (!islandOpen && !hoverSuppressed) {
       islandOpen = true;
@@ -887,7 +889,10 @@ function pollCursorOnce() {
     }
   }
 
-  applyPointerMode(overBall || overCapsule || overPanel);
+  // While the pointer is dragging the icon crop, the pointer can leave the
+  // panel's rectangle without the gesture being over; the window must stay
+  // interactive so pointer capture keeps delivering to the renderer.
+  applyPointerMode(overBall || overCapsule || overPanel || panelBusy);
 }
 
 function snapshot() {
@@ -897,6 +902,11 @@ function snapshot() {
       opacity: store.data.opacity,
       islandPinned: store.data.islandPinned === true,
       ballImage: ballImageUrl(),
+      ballImageScale: store.data.ballImageScale,
+      ballImageOffsetX: store.data.ballImageOffsetX,
+      ballImageOffsetY: store.data.ballImageOffsetY,
+      islandColor: store.data.islandColor,
+      gearColor: store.data.gearColor,
       showBalance: store.data.showBalance,
       showUptime: store.data.showUptime,
       managedByDsh: PLUGIN_MANAGED,
@@ -924,13 +934,126 @@ function push() {
  * pointless and visibly slow.
  */
 let saveTimer = null;
+/** Preference fields the pet changed in memory but has not written yet. */
+const dirtyPreferences = new Set();
+function markPreferencesDirty(keys) {
+  for (const key of keys) dirtyPreferences.add(key);
+}
 function saveSoon(delay = 400) {
   if (saveTimer) return;
-  saveTimer = setTimeout(() => { saveTimer = null; store.save(); }, delay);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    store.save();
+    dirtyPreferences.clear();
+  }, delay);
 }
 function saveNow() {
   if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
   store.save();
+  dirtyPreferences.clear();
+}
+
+/** Write preferences immediately (tray clicks and the debug endpoint). */
+function savePreferencesNow(patch) {
+  if (patch) Object.assign(store.data, patch);
+  saveNow();
+}
+
+/* ------------------------------------------------- DSH settings -> preferences */
+
+const COLOR_RE = /^#[0-9a-f]{6}$/i;
+let preferencesReloadTimer = null;
+let lastPreferencesStamp = 0;
+
+/** Keep values written by the DSH settings page inside the ranges the UI can draw. */
+function sanitisePreferences() {
+  const data = store.data;
+  const number = (value, min, max, fallback) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
+  };
+  data.ballSize = Math.round(number(data.ballSize, MIN_SIZE, MAX_SIZE, 56));
+  data.opacity = number(data.opacity, 0.35, 1, 1);
+  data.ballImageScale = number(data.ballImageScale, 1, 4, 1);
+  // ±100 = the image edge is exactly on the circle edge. The renderer maps this to
+  // the actual pan room of the picture (which depends on its aspect ratio), so the
+  // preview can never show a gap behind the icon.
+  data.ballImageOffsetX = number(data.ballImageOffsetX, -100, 100, 0);
+  data.ballImageOffsetY = number(data.ballImageOffsetY, -100, 100, 0);
+  data.islandPinned = data.islandPinned === true;
+  data.islandColor = COLOR_RE.test(String(data.islandColor || '')) ? String(data.islandColor) : null;
+  data.gearColor = COLOR_RE.test(String(data.gearColor || '')) ? String(data.gearColor) : null;
+  data.ballImage = typeof data.ballImage === 'string' && data.ballImage ? data.ballImage : null;
+  data.showBalance = data.showBalance !== false;
+  data.showUptime = data.showUptime !== false;
+}
+
+/**
+ * The DSH settings page writes preferences.json through the plugin host. The pet owns
+ * the same file, so it re-reads it when it changes instead of keeping its own copy in
+ * memory — that is what makes a slider in DSH move the ball live.
+ */
+function applyPreferencesFromDisk() {
+  const before = JSON.stringify(store.data);
+  const local = { ...store.data };
+  // Keep the ball where the pet has it: dragging updates `centerX/centerY` in memory
+  // long before the file write, and the DSH settings page never owns that pair.
+  const pending = [...dirtyPreferences].map((key) => [key, local[key]]);
+  store.load();
+  // A preference changed here is newer than the file the DSH page just wrote: merge
+  // it back on top so one slider cannot undo the other. The debounced save that
+  // follows writes the merged result.
+  for (const [key, value] of pending) store.data[key] = value;
+  store.data.centerX = local.centerX;
+  store.data.centerY = local.centerY;
+  sanitisePreferences();
+  if (JSON.stringify(store.data) === before) return;
+  if (!Number.isFinite(store.data.centerX) || !Number.isFinite(store.data.centerY)) {
+    const fallback = defaultCentre();
+    store.data.centerX = fallback.centerX;
+    store.data.centerY = fallback.centerY;
+  }
+  try {
+    display = screen.getDisplayNearestPoint({
+      x: Math.round(store.data.centerX ?? 0),
+      y: Math.round(store.data.centerY ?? 0),
+    });
+  } catch {
+    /* keep the previous display */
+  }
+  if (Math.abs(store.data.ballSize - renderedSize) > 0.3) startSizeAnimation();
+  refreshTrayMenu();
+  applyLayout();
+  push();
+  log('preferences reloaded from disk');
+}
+
+function watchPreferences() {
+  const name = path.basename(store.file);
+  const queue = () => {
+    if (preferencesReloadTimer) clearTimeout(preferencesReloadTimer);
+    preferencesReloadTimer = setTimeout(() => {
+      preferencesReloadTimer = null;
+      applyPreferencesFromDisk();
+    }, 60);
+  };
+  try {
+    fs.watch(path.dirname(store.file), { persistent: false }, (_event, changed) => {
+      if (changed && String(changed) !== name) return;
+      queue();
+    });
+  } catch {
+    /* polling below still covers it */
+  }
+  try { lastPreferencesStamp = fs.statSync(store.file).mtimeMs; } catch { /* first run */ }
+  setInterval(() => {
+    let stamp = 0;
+    try { stamp = fs.statSync(store.file).mtimeMs; } catch { /* not written yet */ }
+    if (stamp && stamp !== lastPreferencesStamp) {
+      lastPreferencesStamp = stamp;
+      queue();
+    }
+  }, 2000).unref?.();
 }
 
 /** One animation frame of the ball-size chase. */
@@ -1045,8 +1168,9 @@ function startDebugServer() {
     if (url.pathname === '/size') {
       const value = Number(url.searchParams.get('v'));
       if (Number.isFinite(value)) {
-        store.save({ ballSize: Math.min(MAX_SIZE, Math.max(MIN_SIZE, Math.round(value))) });
+        savePreferencesNow({ ballSize: Math.min(MAX_SIZE, Math.max(MIN_SIZE, Math.round(value))) });
         startSizeAnimation();
+        refreshTrayMenu();
       }
       json({ ok: true, target: store.data.ballSize, rendered: renderedSize });
       return;
@@ -1176,6 +1300,7 @@ function createWindow() {
   });
   win.webContents.on('console-message', (_event, _level, message) => log('[renderer]', message));
   win.webContents.on('did-finish-load', () => log('renderer loaded'));
+  win.webContents.on('did-finish-load', () => { panelBusy = false; });
   win.webContents.on('did-fail-load', (_e, code, desc) => log('renderer failed', code, desc));
   win.webContents.on('render-process-gone', (_e, details) => log('renderer gone', JSON.stringify(details)));
   win.once('ready-to-show', () => {
@@ -1322,11 +1447,8 @@ function createWindow() {
   });
 }
 
-function createTray() {
-  const icon = nativeImage.createFromBuffer(makeIconPng(64)).resize({ width: 16, height: 16 });
-  tray = new Tray(icon);
-  tray.setToolTip('DSH 悬浮球');
-  tray.setContextMenu(Menu.buildFromTemplate([
+function trayTemplate() {
+  return [
     { label: '显示 / 置顶悬浮球', click: () => { if (win) { win.showInactive(); assertOnTop(); } } },
     { label: '打开 DeepSeek Harness', click: () => { dsh.openDsh(lastProbe).then(push); } },
     { type: 'separator' },
@@ -1336,12 +1458,42 @@ function createTray() {
         label: `${size} px`,
         type: 'radio',
         checked: store.data.ballSize === size,
-        click: () => { store.save({ ballSize: size }); applyLayout(); push(); },
+        click: () => {
+          // The tray changes the target, not the painted diameter: the animation
+          // loop owns the actual size and the window geometry that follows it.
+          savePreferencesNow({ ballSize: size });
+          startSizeAnimation();
+          refreshTrayMenu();
+          push();
+        },
       })),
     },
     { type: 'separator' },
     { label: PLUGIN_MANAGED ? '本次关闭悬浮球' : '退出', click: () => app.quit() },
-  ]));
+  ];
+}
+
+let lastTrayBallSize = null;
+
+function refreshTrayMenu() {
+  if (!tray) return;
+  // The size slider emits a preference change per pixel; rebuilding the native
+  // menu that often is pointless. Only the checked radio actually depends on it.
+  const size = store.data.ballSize;
+  if (size === lastTrayBallSize) return;
+  lastTrayBallSize = size;
+  try {
+    tray.setContextMenu(Menu.buildFromTemplate(trayTemplate()));
+  } catch {
+    /* the tray can disappear while the app is shutting down */
+  }
+}
+
+function createTray() {
+  const icon = nativeImage.createFromBuffer(makeIconPng(64)).resize({ width: 16, height: 16 });
+  tray = new Tray(icon);
+  tray.setToolTip('DSH 悬浮球');
+  refreshTrayMenu();
   tray.on('click', () => { if (win) { win.showInactive(); assertOnTop(); } });
 }
 
@@ -1540,6 +1692,10 @@ function registerIpc() {
     const kind = sniffImage(file);
     if (!kind) return { ok: false, detail: '这个文件不是能显示的图片（支持 PNG / JPG / GIF / WebP / BMP）' };
     store.data.ballImage = file;
+    store.data.ballImageScale = 1;
+    store.data.ballImageOffsetX = 0;
+    store.data.ballImageOffsetY = 0;
+    markPreferencesDirty(['ballImage', 'ballImageScale', 'ballImageOffsetX', 'ballImageOffsetY']);
     saveSoon(0);
     push();
     log('ball image', kind, file);
@@ -1548,6 +1704,10 @@ function registerIpc() {
 
   ipcMain.handle('pet:clear-ball-image', () => {
     store.data.ballImage = null;
+    store.data.ballImageScale = 1;
+    store.data.ballImageOffsetX = 0;
+    store.data.ballImageOffsetY = 0;
+    markPreferencesDirty(['ballImage', 'ballImageScale', 'ballImageOffsetX', 'ballImageOffsetY']);
     saveSoon(0);
     push();
     return { ok: true };
@@ -1588,7 +1748,21 @@ function registerIpc() {
     panelOpen = next;
     outsideSince = 0;
     if (next) islandOpen = true;
+    else panelBusy = false;
     pushHover();
+  });
+
+  ipcMain.on('pet:panel-busy', (_event, busy) => {
+    panelBusy = Boolean(busy);
+    if (panelBusy) {
+      // A crop drag can wander past the panel's rectangle; hold the panel open
+      // until the renderer says the gesture is over.
+      outsideSince = 0;
+      if (panelOpen && !islandOpen) {
+        islandOpen = true;
+        pushHover();
+      }
+    }
   });
 
   ipcMain.on('pet:layout-applied', () => releaseHeldBox());
@@ -1660,6 +1834,15 @@ function registerIpc() {
       clean.ballSize = Math.min(MAX_SIZE, Math.max(MIN_SIZE, Math.round(patch.ballSize)));
     }
     if (Number.isFinite(patch.opacity)) clean.opacity = Math.min(1, Math.max(0.35, patch.opacity));
+    if (Number.isFinite(patch.ballImageScale)) {
+      clean.ballImageScale = Math.min(4, Math.max(1, patch.ballImageScale));
+    }
+    if (Number.isFinite(patch.ballImageOffsetX)) {
+      clean.ballImageOffsetX = Math.min(100, Math.max(-100, patch.ballImageOffsetX));
+    }
+    if (Number.isFinite(patch.ballImageOffsetY)) {
+      clean.ballImageOffsetY = Math.min(100, Math.max(-100, patch.ballImageOffsetY));
+    }
     if (typeof patch.islandPinned === 'boolean') clean.islandPinned = patch.islandPinned;
     if (typeof patch.showBalance === 'boolean') clean.showBalance = patch.showBalance;
     if (typeof patch.showUptime === 'boolean') clean.showUptime = patch.showUptime;
@@ -1671,6 +1854,7 @@ function registerIpc() {
     if (Object.keys(clean).length === 0) return;
 
     Object.assign(store.data, clean);
+    markPreferencesDirty(Object.keys(clean));
     saveSoon();
 
     if (clean.ballSize !== undefined) {
@@ -1681,6 +1865,7 @@ function registerIpc() {
         y: Math.round(store.data.centerY),
       });
       startSizeAnimation();
+      refreshTrayMenu();
     } else if (clean.centerX !== undefined) {
       applyLayout();
     }
@@ -1770,6 +1955,7 @@ if (!app.requestSingleInstanceLock()) {
     createWindow();
     createTray();
     log('tray created');
+    watchPreferences();
     if (process.env.PET_DEBUG) startDebugServer();
 
     // A normal Cordis dispose asks the child to exit.  This watchdog covers the

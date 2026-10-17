@@ -114,13 +114,9 @@ html, body {
   border-radius: inherit;
   z-index: 0;
   background: linear-gradient(180deg, var(--surface-hi), var(--surface-lo));
-  border: 1px solid var(--stroke);
-  /* No drop shadow. On a transparent always-on-top window a soft shadow reads as
-     a halo floating over whatever is behind it, which is exactly what it looked
-     like. A hairline ring plus the inset highlight keeps the shape legible on
-     both dark and light wallpapers without casting anything onto the desktop. */
+  /* 不再画外描边：胶囊收拢时那圈 1px 边框正好套在球外，看起来就是球有一圈黑边。
+     只留内侧高光，岛的轮廓交给底色渐变本身。 */
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.34),
     inset 0 1px 0 rgba(255, 255, 255, 0.09);
   opacity: var(--op);
   /* 半透明的底，配一层背景虚化：不然白字压在任何壁纸上都可能糊掉。 */
@@ -133,10 +129,7 @@ html, body {
 
 .capsule:hover::before,
 .capsule.open::before {
-  border-color: rgba(120, 150, 255, 0.32);
-  box-shadow:
-    0 0 0 1px rgba(111, 141, 255, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 .capsule.dragging { cursor: grabbing; }
 
@@ -159,6 +152,11 @@ html.dragging-now * { cursor: grabbing !important; }
   width: var(--s);
   height: var(--s);
   border-radius: 50%;
+  /* border-radius + overflow is enough in a clean stylesheet, but the ball sits
+     inside a transparent always-on-top window where a stray rule or a
+     compositing quirk can make the mask look like a rounded square. clip-path
+     states the circle explicitly and does not depend on either. */
+  clip-path: circle(50% at 50% 50%);
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -195,17 +193,23 @@ html.dragging-now * { cursor: grabbing !important; }
   .avatar { animation: none; }
 }
 
-/* 用户自选的图标：铺满整个圆。用 cover 而不是 contain —— 头像那种 96% + 下移 1%
-   是给立绘量身定的，换成任意图片会露出底色、或者偏离圆心。GIF 在这里照常动，
-   <img> 本来就会播。 */
+/* 用户自选的图标：由 pet.js 按图片比例和缩放/平移算出绝对定位，铺满整个圆。
+   这里只负责建立定位上下文和裁切；具体 width/height/left/top 是内联的。
+   这样非正方形图片也能在圆里拖动取景，而且任何缩放/平移都不会在圆边露出底色。 */
 .avatar.custom {
   /* 用户自己挑的图不参与这套动画（GIF 自己会动）。 */
   animation: none;
+  position: absolute;
+  left: 0;
+  top: 0;
   width: 100%;
   height: 100%;
+  max-width: none;
+  max-height: none;
   object-fit: cover;
   transform: none;
-  border-radius: 50%;
+  transform-origin: 50% 50%;
+  border-radius: 0;
 }
 
 /* 点击唤起 DSH 时的一次性脉冲 */
@@ -338,7 +342,7 @@ html.dragging-now * { cursor: grabbing !important; }
   border: none;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.1);
-  color: #dfe6ff;
+  color: var(--gear-color, #dfe6ff);
   cursor: pointer;
   pointer-events: auto;
   transition: background 0.18s var(--ease), color 0.18s var(--ease), transform 0.18s var(--ease);
@@ -350,11 +354,11 @@ html.dragging-now * { cursor: grabbing !important; }
 }
 /* 齿轮本体填实，中心孔靠后画的这一圈用岛底色"挖"出来。 */
 .gear-teeth { fill: currentColor; }
-.gear-ring { fill: #232c52; }
+.gear-ring { fill: color-mix(in srgb, var(--gear-color, #232c52) 42%, #10162e); }
 .gear:hover { background: rgba(255, 255, 255, 0.18); }
 .gear:active { transform: scale(0.9) rotate(35deg); }
 /* 设置面板开着的时候，齿轮保持点亮。 */
-.gear.on { background: rgba(111, 141, 255, 0.24); color: #cdd8ff; }
+.gear.on { background: rgba(111, 141, 255, 0.24); color: var(--gear-color, #cdd8ff); }
 .gear.on .gear-ring { fill: #2b3563; }
 
 /* ------------------------------------------------------------- 设置面板 */
@@ -447,6 +451,92 @@ html.dragging-now * { cursor: grabbing !important; }
 /* 开关下面的说明不属于 .field，所以没有 .field 的底边距 —— 补一个，
    否则下一行会贴着它。 */
 .switch-row + .hint { margin-bottom: 10px; }
+
+/* --- 图标取景框 --------------------------------------------------------- */
+/* 常驻在「悬浮球图标」按钮下面。宽度和高度必须相等，配 border-radius:50%
+   才是正圆；如果只写 border-radius，扁的盒子会变成椭圆。 */
+.crop-editor {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.crop-editor[aria-disabled="true"] .crop-circle { cursor: default; }
+.crop-circle {
+  position: relative;
+  flex: 0 0 92px;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  clip-path: circle(50% at 50% 50%);
+  overflow: hidden;
+  background: #10162e;
+  cursor: grab;
+  touch-action: none;
+  /* 内描边画出圆的边界，但压在图片上方也不拦截指针；拖动区域覆盖整个圆。 */
+  box-shadow: inset 0 0 0 1px rgba(180, 203, 255, 0.22);
+}
+.crop-circle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+  pointer-events: none;
+}
+.crop-circle.dragging { cursor: grabbing; }
+.crop-circle img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: cover;
+  border-radius: 0;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.crop-side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.crop-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.crop-row label { font-size: 11.5px; color: var(--ink-soft); }
+.crop-row output {
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-soft);
+}
+.crop-side input[type="range"] { height: 16px; }
+.crop-reset {
+  align-self: flex-start;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.crop-reset:hover:not(:disabled) { background: rgba(255, 255, 255, 0.13); }
+.crop-reset:disabled { opacity: 0.4; cursor: default; }
+.crop-side .hint { margin: 0; line-height: 1.45; }
 
 input[type="range"] {
   -webkit-appearance: none;

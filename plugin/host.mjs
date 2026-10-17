@@ -1,5 +1,5 @@
 import { spawn as nodeSpawn } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -158,7 +158,7 @@ export function syncRuntimeApp(runtimePath, packageRoot = PACKAGE_ROOT, log = ()
   const version = versionOf(root)
   if (!version || versionOf(target) === version) return false
   const entries = [
-    'src', 'plugin', 'build', 'client.js', 'cordis.patch.yml', 'package.json',
+    'src', 'plugin', 'build', 'tools', 'client.js', 'cordis.patch.yml', 'package.json',
     'node_modules/koffi', 'node_modules/@koromix',
   ]
   for (const entry of entries) {
@@ -724,6 +724,181 @@ async function readJsonBody(req) {
   try { return JSON.parse(text) } catch { return {} }
 }
 
+/* ---------------------------------------------------- preferences shared with pet */
+
+const SETTING_DEFAULTS = {
+  ballSize: 56,
+  opacity: 1,
+  islandPinned: false,
+  islandColor: null,
+  gearColor: null,
+  ballImage: null,
+  ballImageScale: 1,
+  ballImageOffsetX: 0,
+  ballImageOffsetY: 0,
+  showBalance: true,
+  showUptime: true,
+}
+
+const COLOR_RE = /^#[0-9a-f]{6}$/i
+
+function preferencesFile(userDataDir) {
+  return path.join(userDataDir, 'preferences.json')
+}
+
+function readPreferences(userDataDir) {
+  try {
+    const parsed = JSON.parse(readFileSync(preferencesFile(userDataDir), 'utf8'))
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function writePreferences(userDataDir, data) {
+  mkdirSync(userDataDir, { recursive: true })
+  const file = preferencesFile(userDataDir)
+  const tmp = `${file}.tmp`
+  writeFileSync(tmp, JSON.stringify(data, null, 2))
+  renameSync(tmp, file)
+}
+
+function clampNumber(value, min, max, fallback) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback
+}
+
+/**
+ * Merge one patch from the DSH settings page into preferences.json. The pet watches
+ * this file, so writing it is enough to move the ball — there is no second IPC path.
+ */
+export function patchPreferences(userDataDir, patch) {
+  const current = readPreferences(userDataDir)
+  const next = { ...SETTING_DEFAULTS, ...current }
+  if ('ballSize' in patch) next.ballSize = Math.round(clampNumber(patch.ballSize, 40, 96, next.ballSize))
+  if ('opacity' in patch) next.opacity = clampNumber(patch.opacity, 0.35, 1, next.opacity)
+  if ('islandPinned' in patch) next.islandPinned = patch.islandPinned === true
+  if ('islandColor' in patch) {
+    next.islandColor = COLOR_RE.test(String(patch.islandColor || '')) ? String(patch.islandColor) : null
+  }
+  if ('gearColor' in patch) {
+    next.gearColor = COLOR_RE.test(String(patch.gearColor || '')) ? String(patch.gearColor) : null
+  }
+  if ('ballImageScale' in patch) next.ballImageScale = clampNumber(patch.ballImageScale, 1, 4, next.ballImageScale)
+  // Offsets are a percentage of the available pan room, not of the ball diameter:
+  // ±100 means "the image edge is exactly on the circle edge". Keeping them in this
+  // range is what guarantees the picture always covers the round preview, whatever
+  // its aspect ratio or zoom.
+  if ('ballImageOffsetX' in patch) next.ballImageOffsetX = clampNumber(patch.ballImageOffsetX, -100, 100, next.ballImageOffsetX)
+  if ('ballImageOffsetY' in patch) next.ballImageOffsetY = clampNumber(patch.ballImageOffsetY, -100, 100, next.ballImageOffsetY)
+  if ('showBalance' in patch) next.showBalance = patch.showBalance !== false
+  if ('showUptime' in patch) next.showUptime = patch.showUptime !== false
+  if ('ballImage' in patch) {
+    next.ballImage = patch.ballImage === null
+      ? null
+      : (typeof patch.ballImage === 'string' && patch.ballImage ? patch.ballImage : next.ballImage)
+    if (next.ballImage === null) {
+      next.ballImageScale = 1
+      next.ballImageOffsetX = 0
+      next.ballImageOffsetY = 0
+    }
+  }
+  writePreferences(userDataDir, next)
+  return next
+}
+
+function ballImageVersion(settings) {
+  if (typeof settings.ballImage !== 'string' || !settings.ballImage) return null
+  try {
+    return statSync(settings.ballImage).mtimeMs
+  } catch {
+    return null
+  }
+}
+
+export function settingsPayload(userDataDir) {
+  const settings = { ...SETTING_DEFAULTS, ...readPreferences(userDataDir) }
+  return {
+    settings,
+    ballImageName: typeof settings.ballImage === 'string' && settings.ballImage
+      ? path.basename(settings.ballImage)
+      : null,
+    // Cache-busting stamp for GET /icon. The path alone is not enough: a picture
+    // picked from the same folder can reuse the same name, and the settings page
+    // must show the new file rather than the browser's copy of the old one.
+    ballImageVersion: ballImageVersion(settings),
+  }
+}
+
+const IMAGE_MIME = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  bmp: 'image/bmp',
+}
+
+/** A file can be a valid image under an unrelated name; the bytes decide. */
+function sniffImageMime(bytes) {
+  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png'
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg'
+  if (bytes.length >= 4 && bytes.toString('latin1', 0, 4) === 'GIF8') return 'image/gif'
+  if (bytes.length >= 12 && bytes.toString('latin1', 0, 4) === 'RIFF' && bytes.toString('latin1', 8, 12) === 'WEBP') return 'image/webp'
+  if (bytes.length >= 2 && bytes[0] === 0x42 && bytes[1] === 0x4d) return 'image/bmp'
+  return 'application/octet-stream'
+}
+
+/** The picture the settings page previews: the user's icon, or the built-in art. */
+export function iconPayload(userDataDir) {
+  const settings = { ...SETTING_DEFAULTS, ...readPreferences(userDataDir) }
+  const fallback = path.join(PACKAGE_ROOT, 'src', 'renderer', 'assets', 'avatar.png')
+  const file = typeof settings.ballImage === 'string' && settings.ballImage
+    ? settings.ballImage
+    : fallback
+  for (const candidate of [file, fallback]) {
+    try {
+      const bytes = readFileSync(candidate)
+      const ext = path.extname(candidate).slice(1).toLowerCase()
+      return { bytes, type: IMAGE_MIME[ext] || sniffImageMime(bytes) }
+    } catch {
+      /* try the built-in art next */
+    }
+  }
+  return null
+}
+
+const ICON_TYPES = {
+  png: 'png',
+  jpeg: 'jpg',
+  jpg: 'jpg',
+  webp: 'webp',
+  gif: 'gif',
+  bmp: 'bmp',
+}
+
+/** Save a data-URL image from the settings page next to preferences.json. */
+export function saveIcon(userDataDir, dataUrl) {
+  const match = /^data:image\/([a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$/i.exec(String(dataUrl || ''))
+  if (!match) throw new Error('图标数据格式不对（需要 PNG / JPG / GIF / WebP / BMP 的 data URL）')
+  const ext = ICON_TYPES[match[1].toLowerCase()]
+  if (!ext) throw new Error(`不支持的图片类型：${match[1]}`)
+  const bytes = Buffer.from(match[2], 'base64')
+  if (!bytes.length) throw new Error('图标文件是空的')
+  if (bytes.length > 12 * 1024 * 1024) throw new Error('图标太大（最大 12 MB）')
+  mkdirSync(userDataDir, { recursive: true })
+  const name = `custom-icon-${Date.now()}.${ext}`
+  const file = path.join(userDataDir, name)
+  writeFileSync(file, bytes)
+  // Old crops must not pile up next to the profile.
+  for (const entry of readdirSync(userDataDir)) {
+    if (entry !== name && entry.startsWith('custom-icon-')) {
+      try { rmSync(path.join(userDataDir, entry), { force: true }) } catch { /* in use */ }
+    }
+  }
+  return file
+}
+
 /**
  * What the settings page inside DSH talks to. Client plugins reach their host over HTTP
  * on the same origin (the pattern the other desktop plugins use), so the page can read
@@ -751,6 +926,53 @@ function registerRoutes(ctx, state) {
             enabled: state.enabled,
             runtimeReady: Boolean(state.supervisor.runtimePath),
             canUpdate: Boolean(dshCliPath()),
+          })
+          return
+        }
+        if (req.method === 'GET' && route === '/settings') {
+          sendJson(res, 200, { ok: true, ...settingsPayload(state.userDataDir) })
+          return
+        }
+        if (req.method === 'GET' && route === '/icon') {
+          // Raw bytes rather than a data URL in /settings: an animated GIF stays an
+          // animated GIF, and the page can keep using a plain <img src>.
+          const icon = iconPayload(state.userDataDir)
+          if (!icon) {
+            sendJson(res, 404, { ok: false, error: '没有可预览的图标' })
+            return
+          }
+          res.writeHead(200, {
+            'content-type': icon.type,
+            'content-length': icon.bytes.length,
+            'cache-control': 'no-store',
+          })
+          res.end(icon.bytes)
+          return
+        }
+        if (req.method === 'POST' && route === '/settings') {
+          const body = await readJsonBody(req)
+          const settings = patchPreferences(state.userDataDir, body || {})
+          sendJson(res, 200, {
+            ok: true,
+            settings,
+            ballImageName: settings.ballImage ? path.basename(settings.ballImage) : null,
+            ballImageVersion: ballImageVersion(settings),
+          })
+          return
+        }
+        if (req.method === 'POST' && route === '/icon') {
+          const body = await readJsonBody(req)
+          const file = saveIcon(state.userDataDir, body?.dataUrl)
+          const patch = { ballImage: file }
+          if (Number.isFinite(Number(body?.scale))) patch.ballImageScale = body.scale
+          if (Number.isFinite(Number(body?.offsetX))) patch.ballImageOffsetX = body.offsetX
+          if (Number.isFinite(Number(body?.offsetY))) patch.ballImageOffsetY = body.offsetY
+          const settings = patchPreferences(state.userDataDir, patch)
+          sendJson(res, 200, {
+            ok: true,
+            settings,
+            ballImageName: settings.ballImage ? path.basename(settings.ballImage) : null,
+            ballImageVersion: ballImageVersion(settings),
           })
           return
         }
@@ -840,6 +1062,7 @@ export function apply(ctx, config = {}) {
   }
   const state = {
     profileDir,
+    userDataDir,
     supervisor,
     enabled: readEnabled(),
     setEnabled(enabled) {

@@ -21,6 +21,12 @@ contextBridge.exposeInMainWorld('pet', {
   /** Ask the main process to show or hide the settings panel. */
   setPanel: (open) => ipcRenderer.send('pet:set-panel', open),
   /**
+   * Keep the settings panel alive while the pointer is dragging inside it (the
+   * icon crop can be dragged past the panel edge). The main process otherwise
+   * folds the panel away as soon as the cursor leaves it.
+   */
+  setPanelBusy: (busy) => ipcRenderer.send('pet:panel-busy', busy),
+  /**
    * Tell the main process a press started (true) or ended (false).
    * `moved` separates a real drag from a plain click, so the island is only
    * cleared away for the former.

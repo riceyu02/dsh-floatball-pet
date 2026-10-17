@@ -226,7 +226,10 @@ function summarise(normal, bonus) {
   const gift = bonus
     .filter((w) => w && w.currency === currency)
     .reduce((sum, w) => sum + (toAmount(w.balance) ?? 0), 0);
-  return { amount: total, bonus: gift, currency };
+  // The island shows one number: what can actually be spent. The platform's wallet
+  // endpoint returns the topped-up and granted balances separately, so add them here
+  // instead of showing only the topped-up half.
+  return { amount: total + gift, bonus: gift, currency };
 }
 
 async function fetchAccountBalance(grant) {
@@ -257,8 +260,19 @@ async function fetchApiKeyBalance(key) {
   if (!response.ok) throw new Error(`余额接口 HTTP ${response.status}`);
   const payload = await response.json();
   const infos = Array.isArray(payload.balance_infos) ? payload.balance_infos : [];
-  const normal = infos.map((i) => ({ currency: i.currency, balance: i.total_balance }));
-  const bonus = infos.map((i) => ({ currency: i.currency, balance: i.granted_balance }));
+  const normal = [];
+  const bonus = [];
+  for (const info of infos) {
+    const toppedUp = toAmount(info.topped_up_balance);
+    normal.push({
+      currency: info.currency,
+      // `total_balance` already includes the grant; use the topped-up field so the
+      // grant can be added once in summarise(). Very old payloads only have the total,
+      // and then there is nothing separate left to add.
+      balance: toppedUp ?? info.total_balance,
+    });
+    bonus.push({ currency: info.currency, balance: toppedUp == null ? 0 : info.granted_balance });
+  }
   const summary = summarise(normal, bonus);
   if (!summary) throw new Error('余额接口没有返回钱包');
   return { ...summary, source: 'api-key' };

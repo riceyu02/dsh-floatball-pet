@@ -21,11 +21,17 @@ const sizeInput = document.getElementById('size');
 const sizeOut = document.getElementById('sizeOut');
 const opacityInput = document.getElementById('opacity');
 const opacityOut = document.getElementById('opacityOut');
-const dshManagedHint = document.getElementById('dshManagedHint');
 const pinIslandInput = document.getElementById('pinIsland');
 const ballImageName = document.getElementById('ballImageName');
 const pickBallImageBtn = document.getElementById('pickBallImage');
 const clearBallImageBtn = document.getElementById('clearBallImage');
+const cropEditor = document.getElementById('ballCrop');
+const cropCircle = document.getElementById('cropCircle');
+const cropImage = document.getElementById('cropImage');
+const cropScaleInput = document.getElementById('cropScale');
+const cropScaleOut = document.getElementById('cropScaleOut');
+const cropResetBtn = document.getElementById('cropReset');
+const cropHint = document.getElementById('cropHint');
 const openDshBtn = document.getElementById('openDsh');
 const quitBtn = document.getElementById('quit');
 const balanceEl = document.getElementById('balance');
@@ -253,6 +259,131 @@ function applySize(state) {
 const DEFAULT_BALL_IMAGE = avatar.getAttribute('src');
 let ballImageShown = null;
 
+/* 取景框的状态：缩放 1–4 倍；位移是「可用平移范围」的百分比，±100 表示图片边缘
+   正好压在圆的边界上。这样无论图片长宽比、几倍缩放，圆里都不会露出底色。 */
+const CROP_SCALE_MIN = 1;
+const CROP_SCALE_MAX = 4;
+const CROP_OFFSET_MAX = 100;
+let cropScale = 1;
+let cropOffsetX = 0;
+let cropOffsetY = 0;
+let ballImageRatio = 1;
+let editorRatio = 1;
+let cropCustom = false;
+let cropDragging = null;
+let cropSliderBusy = false;
+let cropSendRaf = 0;
+
+function clampCropScale(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.min(CROP_SCALE_MAX, Math.max(CROP_SCALE_MIN, n)) : 1;
+}
+
+function clampCropOffset(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.min(CROP_OFFSET_MAX, Math.max(-CROP_OFFSET_MAX, n)) : 0;
+}
+
+function imageRatio(img) {
+  const w = Number(img.naturalWidth) || 0;
+  const h = Number(img.naturalHeight) || 0;
+  return w > 0 && h > 0 ? w / h : 1;
+}
+
+/**
+ * Sizes the picture so that, at the current zoom, the shorter side is at least the
+ * ball's diameter. `max(1, ratio)` / `max(1, 1/ratio)` is the cover box; multiplying
+ * both sides by the zoom keeps the aspect ratio.
+ */
+function coverBox(scale, ratio) {
+  const ar = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+  return {
+    width: Math.max(1, ar) * scale,
+    height: Math.max(1, 1 / ar) * scale,
+  };
+}
+
+/**
+ * Lay the picture out inside a square, round viewport.
+ *
+ * At offset -100 the picture's right edge sits exactly on the circle's right edge,
+ * at +100 its left edge sits on the left edge; anywhere in between it fully covers
+ * the circle. That is why the offsets can be clamped to a fixed ±100 regardless of
+ * the image's aspect ratio or zoom.
+ */
+function paintCover(img, scale, offsetX, offsetY, ratio) {
+  const box = coverBox(scale, ratio);
+  const left = (box.width - 1) * 50 * (offsetX / 100 - 1);
+  const top = (box.height - 1) * 50 * (offsetY / 100 - 1);
+  img.style.position = 'absolute';
+  img.style.width = `${box.width * 100}%`;
+  img.style.height = `${box.height * 100}%`;
+  img.style.left = `${left}%`;
+  img.style.top = `${top}%`;
+  img.style.maxWidth = 'none';
+  img.style.maxHeight = 'none';
+  img.style.objectFit = 'cover';
+  img.style.transform = 'none';
+  img.style.transformOrigin = '50% 50%';
+}
+
+function clearCover(img) {
+  for (const property of [
+    'position', 'width', 'height', 'left', 'top',
+    'max-width', 'max-height', 'object-fit', 'transform', 'transform-origin',
+  ]) {
+    img.style.removeProperty(property);
+  }
+}
+
+function paintBallImage() {
+  if (cropCustom) paintCover(avatar, cropScale, cropOffsetX, cropOffsetY, ballImageRatio);
+  else clearCover(avatar);
+}
+
+function paintCropPreview() {
+  if (cropCustom) paintCover(cropImage, cropScale, cropOffsetX, cropOffsetY, editorRatio);
+  else clearCover(cropImage);
+}
+
+function syncCropControls() {
+  cropEditor.setAttribute('aria-disabled', cropCustom ? 'false' : 'true');
+  cropCircle.title = cropCustom ? '拖动图片调整位置' : '选择图片后可调整';
+  cropScaleInput.disabled = !cropCustom;
+  cropResetBtn.disabled = !cropCustom;
+  if (!cropSliderBusy) {
+    cropScaleInput.value = String(cropScale);
+    cropScaleOut.textContent = `${cropScale.toFixed(2)}×`;
+  }
+  cropHint.textContent = cropCustom
+    ? '拖动调整位置，圆内即最终效果'
+    : '选择图片后可拖动和缩放';
+}
+
+/** Apply a crop change locally now; optionally send it to the main process. */
+function setCrop(patch, report) {
+  if (patch && patch.scale !== undefined) cropScale = clampCropScale(patch.scale);
+  if (patch && patch.offsetX !== undefined) cropOffsetX = clampCropOffset(patch.offsetX);
+  if (patch && patch.offsetY !== undefined) cropOffsetY = clampCropOffset(patch.offsetY);
+  syncCropControls();
+  paintBallImage();
+  paintCropPreview();
+  if (report) sendCropSoon();
+}
+
+/** Coalesce pointer-rate crop updates into one preference message per frame. */
+function sendCropSoon() {
+  if (cropSendRaf) return;
+  cropSendRaf = requestAnimationFrame(() => {
+    cropSendRaf = 0;
+    api.set({
+      ballImageScale: cropScale,
+      ballImageOffsetX: cropOffsetX,
+      ballImageOffsetY: cropOffsetY,
+    });
+  });
+}
+
 /**
  * Point the ball at the user's picture, or back at the built-in art.
  *
@@ -264,14 +395,148 @@ let ballImageShown = null;
  * Compared against what is already shown so a re-render does not restart a GIF from
  * frame zero every time a snapshot arrives.
  */
-function applyBallImage(url) {
-  const next = url || null;
-  if (next === ballImageShown) return;
-  ballImageShown = next;
-  avatar.classList.toggle('custom', Boolean(next));
-  avatar.src = next || DEFAULT_BALL_IMAGE;
-  ballImageName.textContent = next ? decodeURIComponent(next.split('/').pop()) : '默认立绘';
+function applyBallImage(config) {
+  const next = config && config.ballImage ? config.ballImage : null;
+  const scale = clampCropScale(config && config.ballImageScale);
+  const offsetX = clampCropOffset(config && config.ballImageOffsetX);
+  const offsetY = clampCropOffset(config && config.ballImageOffsetY);
+  const wasCustom = cropCustom;
+  cropCustom = Boolean(next);
+  if (!next) {
+    // Nothing is being cropped while the built-in art is shown; keep the disabled
+    // controls (and any future custom icon) starting from a clean crop.
+    cropScale = 1;
+    cropOffsetX = 0;
+    cropOffsetY = 0;
+  } else if (!cropSliderBusy && !cropDragging) {
+    cropScale = scale;
+    cropOffsetX = offsetX;
+    cropOffsetY = offsetY;
+  }
+
+  if (next !== ballImageShown) {
+    ballImageShown = next;
+    avatar.classList.toggle('custom', Boolean(next));
+    // A previous broken custom picture hid the avatar; a new source deserves a
+    // fresh attempt, including the built-in art after 「恢复默认」.
+    avatar.style.display = '';
+    avatar.src = next || DEFAULT_BALL_IMAGE;
+    ballImageName.textContent = next ? decodeURIComponent(next.split('/').pop()) : '默认立绘';
+    cropImage.src = next || DEFAULT_BALL_IMAGE;
+    ballImageRatio = 1;
+    editorRatio = 1;
+    // A cached picture may already be decoded, in which case there is no `load`
+    // event left to wait for.
+    if (avatar.complete && avatar.naturalWidth) ballImageRatio = imageRatio(avatar);
+    if (cropImage.complete && cropImage.naturalWidth) editorRatio = imageRatio(cropImage);
+  }
   clearBallImageBtn.disabled = !next;
+  syncCropControls();
+  paintBallImage();
+  paintCropPreview();
+  if (wasCustom !== cropCustom) requestAnimationFrame(reportMetrics);
+}
+
+avatar.addEventListener('load', () => {
+  if (!cropCustom) return;
+  ballImageRatio = imageRatio(avatar);
+  paintBallImage();
+});
+
+cropImage.addEventListener('load', () => {
+  if (!cropCustom) return;
+  editorRatio = imageRatio(cropImage);
+  paintCropPreview();
+});
+
+cropCircle.addEventListener('pointerdown', (event) => {
+  if (!cropCustom || event.button !== 0) return;
+  const rect = cropCircle.getBoundingClientRect();
+  const box = coverBox(cropScale, editorRatio);
+  const roomX = (box.width - 1) / 2;
+  const roomY = (box.height - 1) / 2;
+  if (roomX <= 0 && roomY <= 0) return;
+  cropDragging = {
+    x: event.clientX,
+    y: event.clientY,
+    offsetX: cropOffsetX,
+    offsetY: cropOffsetY,
+    width: rect.width,
+    height: rect.height,
+    roomX,
+    roomY,
+  };
+  try { cropCircle.setPointerCapture(event.pointerId); } catch { /* not fatal */ }
+  cropCircle.classList.add('dragging');
+  api.setPanelBusy(true);
+  event.preventDefault();
+});
+
+cropCircle.addEventListener('pointermove', (event) => {
+  if (!cropDragging) return;
+  const start = cropDragging;
+  let offsetX = cropOffsetX;
+  let offsetY = cropOffsetY;
+  if (start.roomX > 0 && start.width > 0) {
+    offsetX = clampCropOffset(start.offsetX
+      + ((event.clientX - start.x) / (start.width * start.roomX)) * 100);
+  }
+  if (start.roomY > 0 && start.height > 0) {
+    offsetY = clampCropOffset(start.offsetY
+      + ((event.clientY - start.y) / (start.height * start.roomY)) * 100);
+  }
+  setCrop({ offsetX, offsetY }, true);
+});
+
+function endCropDrag(event) {
+  if (!cropDragging) return;
+  cropDragging = null;
+  cropCircle.classList.remove('dragging');
+  api.setPanelBusy(false);
+  if (event && event.pointerId !== undefined) {
+    try { cropCircle.releasePointerCapture(event.pointerId); } catch { /* already released */ }
+  }
+}
+cropCircle.addEventListener('pointerup', endCropDrag);
+cropCircle.addEventListener('pointercancel', endCropDrag);
+cropCircle.addEventListener('lostpointercapture', endCropDrag);
+
+cropScaleInput.addEventListener('pointerdown', () => {
+  cropSliderBusy = true;
+  api.setPanelBusy(true);
+});
+cropScaleInput.addEventListener('input', () => {
+  setCrop({ scale: Number(cropScaleInput.value) }, true);
+});
+cropScaleInput.addEventListener('change', () => {
+  cropSliderBusy = false;
+  api.setPanelBusy(false);
+});
+cropScaleInput.addEventListener('pointercancel', () => {
+  cropSliderBusy = false;
+  api.setPanelBusy(false);
+});
+cropResetBtn.addEventListener('click', () => {
+  setCrop({ scale: 1, offsetX: 0, offsetY: 0 }, true);
+});
+
+/** Tint the island surface and the settings gear when the user picked colours. */
+function applyColors(config) {
+  const root = document.documentElement;
+  const hex = (value) => (/^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value) : null);
+  const island = hex(config.islandColor);
+  if (island) {
+    root.style.setProperty('--surface-hi', `color-mix(in srgb, ${island} 88%, white)`);
+    root.style.setProperty('--surface-lo', `color-mix(in srgb, ${island} 76%, black)`);
+    root.style.setProperty('--stroke', `color-mix(in srgb, ${island} 62%, white)`);
+  } else {
+    root.style.removeProperty('--surface-hi');
+    root.style.removeProperty('--surface-lo');
+    root.style.removeProperty('--stroke');
+  }
+  const gearColor = hex(config.gearColor);
+  if (gearColor) root.style.setProperty('--gear-color', gearColor);
+  else root.style.removeProperty('--gear-color');
 }
 
 pickBallImageBtn.addEventListener('click', async () => {
@@ -473,13 +738,13 @@ function apply(snapshot) {
     opacityInput.value = String(Math.round(config.opacity * 100));
     opacityOut.textContent = `${Math.round(config.opacity * 100)}%`;
   }
-  dshManagedHint.hidden = !config.managedByDsh;
   quitBtn.textContent = config.managedByDsh ? '本次关闭' : '退出';
   quitBtn.title = config.managedByDsh ? '关闭到下次启动 DSH' : '';
   pinIslandInput.checked = !!config.islandPinned;
 
 
-  applyBallImage(config.ballImage);
+  applyColors(config);
+  applyBallImage(config);
 
   lineBalance.style.display = config.showBalance ? '' : 'none';
   lineUptime.style.display = config.showUptime ? '' : 'none';
@@ -575,7 +840,11 @@ quitBtn.addEventListener('click', () => api.quit());
 
 sizeInput.addEventListener('pointerdown', () => { sliderBusy = true; });
 opacityInput.addEventListener('pointerdown', () => { sliderBusy = true; });
-window.addEventListener('pointerup', () => { sliderBusy = false; });
+window.addEventListener('pointerup', () => {
+  sliderBusy = false;
+  cropSliderBusy = false;
+  api.setPanelBusy(false);
+});
 
 sizeInput.addEventListener('input', () => {
   const value = Number(sizeInput.value);

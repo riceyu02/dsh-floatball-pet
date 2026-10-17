@@ -12,6 +12,14 @@ const DEFAULTS = {
   islandPinned: false,
   // Absolute path to a custom ball image (static or animated GIF). null = built-in art.
   ballImage: null,
+  // Crop for the custom image: zoom, and pan as a percentage of the available
+  // room (±100 = an image edge exactly on the circle edge).
+  ballImageScale: 1,
+  ballImageOffsetX: 0,
+  ballImageOffsetY: 0,
+  // Island and settings-button tint. null = the built-in indigo palette.
+  islandColor: null,
+  gearColor: null,
   showBalance: true,
   showUptime: true,
 };

@@ -9,10 +9,14 @@ import {
   PetSupervisor,
   chooseUpdate,
   helperEnvironment,
+  iconPayload,
+  patchPreferences,
   pickReleaseAsset,
   resolveDshHome,
   resolveRuntime,
+  saveIcon,
   selfSpec,
+  settingsPayload,
   syncRuntimeApp,
   tarballVersion,
 } from '../plugin/host.mjs'
@@ -258,4 +262,49 @@ test('the GitHub fallback prefers the thin package over the -full asset', () => 
   assert.equal(pickReleaseAsset([full, thin]).name, thin.name)
   assert.equal(pickReleaseAsset([full]).name, full.name)
   assert.equal(pickReleaseAsset([]), null)
+})
+
+test('DSH settings clamp values and store the icon next to preferences', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'pet-settings-'))
+  try {
+    const saved = patchPreferences(dir, {
+      ballSize: 200,
+      opacity: 0.1,
+      islandPinned: true,
+      islandColor: '#112233',
+      gearColor: 'not-a-colour',
+      ballImageScale: 9,
+      ballImageOffsetX: -999,
+      ballImageOffsetY: 999,
+    })
+    assert.equal(saved.ballSize, 96)
+    assert.equal(saved.opacity, 0.35)
+    assert.equal(saved.islandPinned, true)
+    assert.equal(saved.islandColor, '#112233')
+    assert.equal(saved.gearColor, null)
+    assert.equal(saved.ballImageScale, 4)
+    assert.equal(saved.ballImageOffsetX, -100)
+    assert.equal(saved.ballImageOffsetY, 100)
+    assert.equal(settingsPayload(dir).ballImageName, null)
+
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+    const file = saveIcon(dir, png)
+    assert.equal(existsSync(file), true)
+    patchPreferences(dir, { ballImage: file })
+    const payload = settingsPayload(dir)
+    assert.equal(payload.ballImageName, path.basename(file))
+    assert.equal(typeof payload.ballImageVersion, 'number')
+    const icon = iconPayload(dir)
+    assert.equal(icon.type, 'image/png')
+    assert.ok(icon.bytes.length > 0)
+
+    // Going back to the built-in art resets the crop so the next custom icon does
+    // not inherit a pan/zoom the user cannot see.
+    const cleared = patchPreferences(dir, { ballImage: null })
+    assert.equal(cleared.ballImageScale, 1)
+    assert.equal(cleared.ballImageOffsetX, 0)
+    assert.equal(cleared.ballImageOffsetY, 0)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
