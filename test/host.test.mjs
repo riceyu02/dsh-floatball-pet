@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import win32 from '../src/win32.js'
 import {
   PetSupervisor,
   chooseUpdate,
@@ -239,4 +240,13 @@ test('refreshes the cached runtime app when the plugin version changes', () => {
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
+})
+
+test('desktop overlays never count as full-screen games', () => {
+  // NVIDIA's overlay is a borderless CEF widget covering the screen; on a TUF laptop it
+  // used to hide the pet forever at boot.
+  assert.equal(win32.isOverlayWindow('cef-osc-widget', 'NVIDIA GeForce Overlay DT', 'nvidia overlay'), true)
+  assert.equal(win32.isOverlayWindow('GameOverlayUI', 'Steam', 'gameoverlayui'), true)
+  assert.equal(win32.isOverlayWindow('Chrome_WidgetWin_1', 'Video', 'chrome'), false)
+  assert.equal(win32.isOverlayWindow('', '', 'explorer'), false)
 })

@@ -285,6 +285,9 @@ for (const extra of envNames('DSH_PET_IGNORE_PROCESSES')) NOT_A_GAME.add(extra);
 function judgeFullscreenWindow(full) {
   if (!full) return null;
   const name = full.processName || '';
+  if (win32.isOverlayWindow(full.className, full.title, name)) {
+    return { hide: false, why: `${full.title || name || full.className} is an overlay` };
+  }
   if (name && FORCED_GAMES.has(name)) return { hide: true, why: `${name} is on the game list` };
   if (win32.d3dFullscreenRunning()) {
     return { hide: true, why: 'Windows reports a full-screen Direct3D application' };

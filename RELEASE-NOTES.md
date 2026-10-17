@@ -3,6 +3,12 @@
 给 GitHub Release 页面用的摘要。每个 `## <版本>` 一节对应同名 tag，发布时由
 `.github/workflows/release.yml` 原样取用；完整的技术细节见 [CHANGELOG.md](CHANGELOG.md)。
 
+## 0.3.1
+
+- **修复**装了 NVIDIA GeForce Experience / NVIDIA App 的电脑（比如天选）上悬浮球一直不显示：NVIDIA 的桌面
+  覆盖层是一个铺满屏幕的无边框窗口，被误判成全屏游戏后悬浮球会永久隐藏。现在覆盖层窗口不参与全屏判定，
+  真正全屏的游戏和视频仍会隐藏悬浮球。
+
 ## 0.3.0
 
 三个修复：

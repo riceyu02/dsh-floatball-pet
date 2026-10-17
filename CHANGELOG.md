@@ -5,6 +5,12 @@
 > 本文件记录 `dsh-floatball-pet` 的版本变更。
 > 发布页用的精简摘要见 [RELEASE-NOTES.md](RELEASE-NOTES.md)。
 
+## 0.3.1
+
+- **修复**装了 NVIDIA GeForce Experience / NVIDIA App 的机器上，悬浮球一启动就被当成「全屏游戏」永久隐藏。
+  桌面的覆盖层窗口（NVIDIA 的 `cef-osc-widget`、Steam、Xbox Game Bar 等）现在不参与全屏判定；真正全屏的
+  游戏和视频仍会隐藏。
+
 ## 0.3.0
 
 - **修复**设置里不显示「灵动岛悬浮球」：设置行的宿主入口一度指向 Electron 的 `src/main.js`，DSH 宿主导入时

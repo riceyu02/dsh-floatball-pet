@@ -153,6 +153,28 @@ function isTopmost(hwnd) {
 }
 
 /**
+ * Windows that sit above everything for an on-screen overlay (NVIDIA GeForce Experience,
+ * Steam, Xbox Game Bar, ...). They often cover the whole display while being transparent,
+ * so the geometry test would otherwise mistake them for a game and hide the pet forever.
+ * NVIDIA's widget is a CEF window with a stable class; the rest are matched by process.
+ */
+const OVERLAY_CLASSES = new Set(['cef-osc-widget'])
+const OVERLAY_PROCESSES = new Set([
+  'nvidia overlay', 'nvcontainer', 'nvsphelper64', 'gameoverlayui', 'gamebar', 'xboxgamebar',
+])
+
+function isOverlayWindow(className, title, processName) {
+  const cls = String(className || '').toLowerCase()
+  const proc = String(processName || '').toLowerCase()
+  const text = String(title || '').toLowerCase()
+  if (OVERLAY_CLASSES.has(cls)) return true
+  if (OVERLAY_PROCESSES.has(proc)) return true
+  if (proc.startsWith('nvidia') && (proc.includes('overlay') || proc.includes('share'))) return true
+  if (text.includes('geforce overlay')) return true
+  return false
+}
+
+/**
  * The first visible window, in z-order, that covers a whole display — a full-screen or
  * borderless-full-screen window, i.e. one that owns the screen rather than sharing it.
  *
@@ -160,10 +182,10 @@ function isTopmost(hwnd) {
  * not qualify; a full-screen or borderless one includes the taskbar's strip. Window styles
  * are useless as a test: borderless full-screen games keep a plain WS_POPUP or even the
  * caption style, and Windows' own "a full-screen D3D application is running" state
- * (SHQueryUserNotificationState) is only true for exclusive mode. Shell windows are
- * skipped by class — the desktop, the taskbar and the Start menu all report full-screen
- * rectangles. Telling a *game* from other full-screen windows is the caller's job; this
- * only reports what is there.
+ * (SHQueryUserNotificationState) is only true for exclusive mode. Shell windows and
+ * desktop overlays are skipped — the desktop, the taskbar, the Start menu and the NVIDIA
+ * overlay all report full-screen rectangles. Telling a *game* from other full-screen
+ * windows is the caller's job; this only reports what is there.
  *
  * @returns {{hwnd: string, className: string, title: string, pid: number|null,
  *            processName: string, borderless: boolean}|null}
@@ -188,12 +210,15 @@ function fullscreenWindow(bounds, ownHwnd = null, tolerance = 2) {
       if (rect.y + rect.height < bounds.y + bounds.height - tolerance) return true;
       const className = String(classNameOf(hwnd) || '');
       if (SHELL_CLASSES.has(className.toLowerCase())) return true;
+      const title = windowTitle(hwnd);
+      const processName = processImageName(pid);
+      if (isOverlayWindow(className, title, processName)) return true;
       hit = {
         hwnd: String(hwnd),
         className,
-        title: windowTitle(hwnd),
+        title,
         pid,
-        processName: processImageName(pid),
+        processName,
         borderless: isBorderless(hwnd),
       };
       return false;
@@ -464,6 +489,7 @@ module.exports = {
   foregroundFullscreen,
   fullscreenWindow,
   isBorderless,
+  isOverlayWindow,
   processImageName,
   classNameOf,
   handleOf,
