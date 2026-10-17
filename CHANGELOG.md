@@ -3,8 +3,6 @@
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
 > 本文件只记录当前这条线（`dsh-floatball-pet`，版本号从 0.1.0 重新起算）。
-> 改名前的 20 个版本（`dsh-desktop-pet` 0.2.0 – 0.2.20）已归档到
-> [docs/CHANGELOG-0.2.x.md](docs/CHANGELOG-0.2.x.md)。
 
 ## 0.1.0
 
