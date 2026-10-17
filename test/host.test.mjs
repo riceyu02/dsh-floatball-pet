@@ -6,6 +6,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   PetSupervisor,
+  chooseUpdate,
   helperEnvironment,
   resolveDshHome,
   resolveRuntime,
@@ -78,6 +79,14 @@ test('resolves the version-keyed runtime cache written by prepare-install', () =
     writeFileSync(path.join(versioned, '.ready.json'), JSON.stringify({ electronVersion: '33.4.11' }))
     assert.equal(resolveRuntime(root, env), executable)
 
+    // Two cached Electron versions: the newest wins, not whichever the directory
+    // listing happens to return first.
+    const older = path.join(cache, '33.2.0')
+    mkdirSync(older, { recursive: true })
+    writeFileSync(path.join(older, 'DSH悬浮球.exe'), '')
+    writeFileSync(path.join(older, '.ready.json'), JSON.stringify({ electronVersion: '33.2.0' }))
+    assert.equal(resolveRuntime(root, env), executable)
+
     // A runtime shipped inside the package still wins, so an install that carries one
     // never switches over to the cache.
     const packed = path.join(root, 'runtime', 'DSH悬浮球.exe')
@@ -100,6 +109,17 @@ test('reads this package from the profile manifest and release tarball names', (
   assert.equal(tarballVersion('dsh-orb-0.1.4.tgz'), null)
   assert.equal(tarballVersion('not-dsh-floatball-pet-1.0.0.tgz'), null)
   assert.equal(tarballVersion('dsh-floatball-pet-0.1.0.tgz.part'), null)
+})
+
+test('prefers npm on ties and ignores sources that are not newer', () => {
+  const release = { version: '0.2.0', assetUrl: 'https://example.test/a.tgz' }
+  assert.deepEqual(chooseUpdate('0.1.0', { version: '0.2.0' }, release), { source: 'npm', latest: '0.2.0' })
+  assert.deepEqual(chooseUpdate('0.1.0', { version: '0.1.5' }, release), { source: 'release', latest: '0.2.0' })
+  assert.deepEqual(chooseUpdate('0.2.0', { version: '0.2.0' }, release), null)
+  assert.deepEqual(chooseUpdate('0.1.0', null, release), { source: 'release', latest: '0.2.0' })
+  assert.deepEqual(chooseUpdate('0.1.0', { version: '0.1.1' }, null), { source: 'npm', latest: '0.1.1' })
+  // A newer tag without an attached installer cannot be installed from GitHub.
+  assert.equal(chooseUpdate('0.1.0', null, { version: '0.2.0', assetUrl: null }), null)
 })
 
 test('supervisor starts, retries an early sandbox failure, and stops the helper', async () => {

@@ -1,5 +1,5 @@
 import { spawn as nodeSpawn } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -15,6 +15,10 @@ const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 const EXECUTABLE_NAME = 'DSH悬浮球.exe'
 const REPO = 'riceyu02/dsh-floatball-pet'
 const API_LATEST = `https://api.github.com/repos/${REPO}/releases/latest`
+const NPM_LATEST = 'https://registry.npmjs.org/dsh-floatball-pet/latest'
+const NPM_LATEST_MIRROR = 'https://registry.npmmirror.com/dsh-floatball-pet/latest'
+const UPDATE_TIMEOUT_MS = 8000
+const RELEASE_TIMEOUT_MS = 12000
 const ROUTE_PREFIX = '/.dsh-floatball-pet'
 /** Installers to keep: the installed one plus the previous (offline rollback). */
 const KEEP_INSTALLERS = 2
@@ -85,9 +89,15 @@ function preparedRuntime(root) {
   } catch {
     return null
   }
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue
-    const dir = path.join(root, entry.name)
+  // Newest Electron first: after an upgrade the cache can hold more than one version,
+  // and picking the older one would silently run a different engine than the package
+  // was built against.
+  const versions = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort((a, b) => compareVersions(b, a))
+  for (const version of versions) {
+    const dir = path.join(root, version)
     if (!existsSync(path.join(dir, '.ready.json'))) continue
     const executable = [EXECUTABLE_NAME, 'electron.exe']
       .map(name => path.join(dir, name))
@@ -103,7 +113,7 @@ function preparedRuntime(root) {
  * 1. `DSH_PET_RUNTIME_EXE` — an explicit override, for tests and troubleshooting.
  * 2. `runtime/` inside the package — what the all-in-one tarball ships, so an install
  *    that already carries a runtime keeps using it and never touches the cache.
- * 3. `dist/DSH悬浮球` — a source checkout assembled by `npm run pack`.
+ * 3. `dist/DSH悬浮球` — a source checkout assembled by `tools/assemble.cjs`.
  * 4. the version-keyed cache from `tools/prepare-install.cjs` — what a published,
  *    runtime-less install relies on, and what makes an upgrade download nothing.
  *
@@ -302,7 +312,7 @@ async function fetchJson(url, timeoutMs = 20000) {
     headers: { Accept: 'application/vnd.github+json', 'User-Agent': `dsh-floatball-pet${installedVersion()}` },
     signal: AbortSignal.timeout(timeoutMs),
   })
-  if (!response.ok) throw new Error(`GitHub 返回 HTTP ${response.status}`)
+  if (!response.ok) throw new Error(`请求失败：HTTP ${response.status}`)
   return response.json()
 }
 
@@ -346,20 +356,76 @@ async function electronRequest(url, { json = false, timeoutMs = 20000 } = {}) {
   })
 }
 
-/** Latest release, compared with what is installed. */
-export async function checkLatest(packageRoot = PACKAGE_ROOT) {
-  const current = installedVersion(packageRoot)
-  const release = await fetchJson(API_LATEST)
-  const latest = String(release.tag_name || '').replace(/^v/, '')
+/** The latest version published on npm, official registry first, mirror second. */
+async function npmLatest() {
+  for (const url of [NPM_LATEST, NPM_LATEST_MIRROR]) {
+    try {
+      const data = await fetchJson(url, UPDATE_TIMEOUT_MS)
+      const version = String((data && data.version) || '').replace(/^v/, '')
+      if (version) return { version }
+    } catch {
+      // try the next registry
+    }
+  }
+  return null
+}
+
+/** The latest GitHub release and its installer asset. */
+async function githubLatest() {
+  const release = await fetchJson(API_LATEST, RELEASE_TIMEOUT_MS)
+  const version = String(release.tag_name || '').replace(/^v/, '')
   const asset = (release.assets || []).find((entry) => /\.tgz$/i.test(entry.name || ''))
   return {
-    current,
-    latest,
-    newer: Boolean(latest) && compareVersions(latest, current) > 0,
+    version,
     pageUrl: release.html_url || `https://github.com/${REPO}/releases`,
     assetName: asset ? asset.name : null,
     assetUrl: asset ? asset.browser_download_url : null,
     assetSize: asset ? asset.size : null,
+  }
+}
+
+/**
+ * Pick the newer of the two sources. npm wins ties: it fetches only the package, while a
+ * release asset may still carry the runtime.
+ */
+export function chooseUpdate(current, npm, release) {
+  const candidates = []
+  if (npm && npm.version) candidates.push({ source: 'npm', latest: npm.version })
+  if (release && release.version && release.assetUrl) candidates.push({ source: 'release', latest: release.version })
+  let best = null
+  for (const candidate of candidates) {
+    if (compareVersions(candidate.latest, current) <= 0) continue
+    if (best === null || compareVersions(candidate.latest, best.latest) > 0) best = candidate
+  }
+  return best
+}
+
+/** Latest version from npm and GitHub, compared with what is installed. */
+export async function checkLatest(packageRoot = PACKAGE_ROOT) {
+  const current = installedVersion(packageRoot)
+  const [npm, release] = await Promise.all([
+    npmLatest().catch(() => null),
+    githubLatest().catch(() => null),
+  ])
+  const chosen = chooseUpdate(current, npm, release)
+  let latest = current
+  for (const candidate of [npm, release]) {
+    if (candidate && candidate.version && compareVersions(candidate.version, latest) > 0) latest = candidate.version
+  }
+  // The release asset is only a fallback when it is not older than what we are about to
+  // install: an npm release can appear before its GitHub release does.
+  const usableAsset = Boolean(release && release.assetUrl
+    && (!chosen || chosen.source === 'release' || compareVersions(release.version, chosen.latest) >= 0))
+  return {
+    current,
+    latest,
+    newer: chosen !== null,
+    source: chosen ? chosen.source : null,
+    npmVersion: chosen && chosen.source === 'npm' ? chosen.latest : null,
+    pageUrl: (release && release.pageUrl) || `https://github.com/${REPO}/releases`,
+    assetName: usableAsset ? release.assetName : null,
+    assetUrl: usableAsset ? release.assetUrl : null,
+    assetSize: usableAsset ? release.assetSize : null,
   }
 }
 
@@ -380,9 +446,9 @@ function download(url) {
 }
 
 /**
- * Delete installers of versions we have moved past (113 MB each, in the directory people
- * back up). The one the profile points at is never touched — removing that breaks the
- * next `pnpm install` — and neither are the newest couple, which are the rollback.
+ * Delete installers of versions we have moved past (the directory people back up). The
+ * one the profile points at is never touched — removing that breaks the next
+ * `pnpm install` — and neither are the newest couple, which are the rollback.
  */
 export function cleanupOldInstallers(profileDir, justInstalled = null) {
   const directory = path.join(profileDir, 'plugin-tarballs')
@@ -390,8 +456,8 @@ export function cleanupOldInstallers(profileDir, justInstalled = null) {
   try {
     const manifest = JSON.parse(readFileSync(path.join(profileDir, 'package.json'), 'utf8'))
     const spec = selfSpec(manifest)
-    if (typeof spec !== 'string' || !spec.startsWith('file:')) return removed
-    const keep = new Set([path.resolve(profileDir, spec.slice('file:'.length))])
+    const keep = new Set()
+    if (typeof spec === 'string' && spec.startsWith('file:')) keep.add(path.resolve(profileDir, spec.slice('file:'.length)))
     if (justInstalled) keep.add(path.resolve(justInstalled))
     const names = readdirSync(directory)
       .filter((entry) => tarballMatch(entry) !== null)
@@ -411,16 +477,8 @@ export function cleanupOldInstallers(profileDir, justInstalled = null) {
   return removed
 }
 
-/**
- * Download the new installer, stop the helper, then let the DSH CLI install it.
- *
- * Stopping first is not optional: the helper's executable sits inside the package pnpm
- * has to replace, and a half-replaced package is a profile DSH cannot boot from. DSH
- * itself needs a restart afterwards — a new module generation cannot be loaded into a
- * running process.
- */
-export async function applyUpdate({ release, profileDir, supervisor, log = () => {} }) {
-  if (!release || !release.assetUrl || !release.assetName) throw new Error('这个 Release 没有可用的 .tgz 附件')
+/** Download (or reuse) the release installer inside the profile. */
+async function fetchInstaller(release, profileDir) {
   const tarballDir = path.join(profileDir, 'plugin-tarballs')
   mkdirSync(tarballDir, { recursive: true })
   const target = path.join(tarballDir, release.assetName)
@@ -430,15 +488,14 @@ export async function applyUpdate({ release, profileDir, supervisor, log = () =>
     writeFileSync(partial, buffer)
     renameSync(partial, target)
   }
+  return target
+}
 
-  supervisor?.stop()
-  await new Promise((resolve) => setTimeout(resolve, 1500))
-
-  const cli = dshCliPath()
-  if (!cli) throw new Error('找不到 DSH 的 CLI，无法自动安装')
-  const result = await new Promise((resolve) => {
+/** Run a pnpm command through the DSH CLI in the profile and capture its output. */
+function runDshCli(cli, profileDir, args) {
+  return new Promise((resolve) => {
     const child = nodeSpawn(process.execPath, [
-      '--expose-internals', cli, 'plugin', '--profile', path.basename(profileDir), 'add', target,
+      '--expose-internals', cli, 'plugin', '--profile', path.basename(profileDir), ...args,
     ], { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, windowsHide: true })
     let output = ''
     child.stdout?.on('data', (chunk) => { output += chunk })
@@ -446,10 +503,147 @@ export async function applyUpdate({ release, profileDir, supervisor, log = () =>
     child.once('exit', (code) => resolve({ code, output }))
     child.once('error', (error) => resolve({ code: -1, output: error.message }))
   })
+}
+
+/**
+ * pnpm 11 refuses to run a dependency's install scripts until their exact key is listed
+ * under `allowBuilds` in the profile's pnpm-workspace.yaml. The key is `name@<resolved
+ * spec>` — for a file install that includes the tarball path, which is why a bare package
+ * name is not enough.
+ */
+function allowBuildScripts(profileDir, keys) {
+  const file = path.join(profileDir, 'pnpm-workspace.yaml')
+  let text
+  try {
+    text = readFileSync(file, 'utf8')
+  } catch {
+    return
+  }
+  const missing = keys.filter((key) => !text.includes(`"${key}": true`))
+  if (missing.length === 0) return
+  const lines = missing.map((key) => `  "${key}": true`).join('\n')
+  if (/^allowBuilds:[ \t]*$/m.test(text)) {
+    text = text.replace(/^allowBuilds:[ \t]*$/m, `allowBuilds:\n${lines}`)
+  } else {
+    text = `${text.replace(/\s*$/, '')}\n\nallowBuilds:\n${lines}\n`
+  }
+  try {
+    writeFileSync(file, text)
+  } catch {
+    // best effort: the install then fails with pnpm's own message
+  }
+}
+
+/** The pnpm `allowBuilds` key a tarball install resolves to. */
+function fileBuildKey(assetName) {
+  return `${PACKAGE_NAME}@file:plugin-tarballs/${assetName}`
+}
+
+/**
+ * Install one spec, allowing this package's build scripts first. When pnpm still reports
+ * ignored builds, the package itself is already in place — approving and rebuilding runs
+ * the runtime hook, which hits the cache we just populated.
+ */
+async function installViaCli(cli, profileDir, spec, buildKeys, log) {
+  allowBuildScripts(profileDir, buildKeys)
+  let result = await runDshCli(cli, profileDir, ['add', spec])
+  if (result.code !== 0 && /IGNORED_BUILDS/.test(result.output)) {
+    const rebuild = await runDshCli(cli, profileDir, ['rebuild', PACKAGE_NAME])
+    if (rebuild.code === 0) {
+      log('info', '已放行构建脚本并完成安装')
+      result = { code: 0, output: `${result.output}\n${rebuild.output}` }
+    }
+  }
+  return result
+}
+
+/**
+ * Move the runtime of the package being replaced into the version-keyed cache. A fat
+ * install carries Electron inside the package; after switching to the npm package that
+ * directory is gone, and without this copy the next install would download 110 MB again.
+ * The marker is what `prepare-install.cjs` treats as a completed assembly.
+ */
+function ensureRuntimeCached(profileDir, log) {
+  const packageRuntime = path.join(PACKAGE_ROOT, 'runtime')
+  if (!existsSync(packageRuntime)) return null
+  let version
+  try {
+    version = readFileSync(path.join(packageRuntime, 'version'), 'utf8').trim()
+  } catch {
+    return null
+  }
+  if (!version) return null
+  const target = path.join(cachedRuntimeRoot(profileDir), version)
+  if (existsSync(path.join(target, '.ready.json'))) return target
+  try {
+    log('info', `把现有运行时缓存到 ${target}`)
+    mkdirSync(target, { recursive: true })
+    cpSync(packageRuntime, target, { recursive: true })
+    writeFileSync(path.join(target, '.ready.json'), JSON.stringify({
+      electronVersion: version,
+      source: 'migrated',
+      completedAt: new Date().toISOString(),
+    }, null, 2))
+    return target
+  } catch (error) {
+    log('warn', `缓存现有运行时失败：${error.message}`)
+    return null
+  }
+}
+
+/**
+ * Install the new version. npm is the cheap path (package only, runtime comes from the
+ * cache); the GitHub asset is both the explicit source when npm is behind and the
+ * fallback when the npm install fails.
+ *
+ * Stopping the helper first is not optional: its executable sits inside the package pnpm
+ * replaces, and a half-replaced package is a profile DSH cannot boot from. DSH itself
+ * needs a restart afterwards — a new module generation cannot be loaded into a running
+ * process.
+ */
+export async function applyUpdate({ release, profileDir, supervisor, log = () => {} }) {
+  const viaNpm = Boolean(release && release.source === 'npm' && release.npmVersion)
+  const canFallback = Boolean(release && release.assetUrl && release.assetName)
+  if (!viaNpm && !canFallback) throw new Error('这个版本没有可用的安装源')
+
+  let target = null
+  if (!viaNpm) target = await fetchInstaller(release, profileDir)
+
+  supervisor?.stop()
+  await new Promise((resolve) => setTimeout(resolve, 1500))
+  ensureRuntimeCached(profileDir, log)
+
+  const cli = dshCliPath()
+  if (!cli) throw new Error('找不到 DSH 的 CLI，无法自动安装')
+
+  let result
+  let source = 'release'
+  if (viaNpm) {
+    source = 'npm'
+    const spec = `${PACKAGE_NAME}@${release.npmVersion}`
+    result = await installViaCli(cli, profileDir, spec, [spec, PACKAGE_NAME], log)
+    if (result.code !== 0 && canFallback) {
+      log('warn', 'npm 安装失败，改用 GitHub 安装包重试')
+      target = await fetchInstaller(release, profileDir)
+      result = await installViaCli(cli, profileDir, target, [fileBuildKey(release.assetName)], log)
+      source = 'release'
+    }
+  } else {
+    result = await installViaCli(cli, profileDir, target, [fileBuildKey(release.assetName)], log)
+  }
+
   log(result.code === 0 ? 'info' : 'error', `更新安装结束：code=${result.code}`)
   const removed = result.code === 0 ? cleanupOldInstallers(profileDir, target) : []
   if (removed.length) log('info', `已清理旧安装包：${removed.join(', ')}`)
-  return { ok: result.code === 0, code: result.code, tarball: target, removed, output: result.output.slice(-2000) }
+  return {
+    ok: result.code === 0,
+    code: result.code,
+    source,
+    version: release.latest || release.npmVersion || null,
+    tarball: target,
+    removed,
+    output: result.output.slice(-2000),
+  }
 }
 
 /* ------------------------------------------------------------------- routes --- */
@@ -511,7 +705,7 @@ function registerRoutes(ctx, state) {
         }
         if (req.method === 'POST' && route === '/update') {
           const body = await readJsonBody(req)
-          const release = body && body.assetUrl ? body : await checkLatest()
+          const release = body && body.latest ? body : await checkLatest()
           if (!release.newer && !body.force) {
             sendJson(res, 200, { ok: true, alreadyLatest: true, version: release.current })
             return

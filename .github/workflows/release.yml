@@ -1,8 +1,8 @@
 name: release
 
-# Push a tag like v0.1.1 and the plugin installer is built and attached to the
-# matching GitHub Release. The bundle carries a full Electron runtime, so the
-# artifact is ~113 MB and is deliberately not stored in git.
+# Push a tag like v0.2.0 and the plugin package is packed and attached to the
+# matching GitHub Release. The tarball carries no runtime (about 1.7 MB); the
+# install hook downloads Electron on the user's machine.
 on:
   push:
     tags:
@@ -41,15 +41,15 @@ jobs:
             throw "tag v$tag does not match package.json version $pkg"
           }
 
-      - name: Build the DSH plugin bundle
-        run: npm run build:dsh-plugin
+      - name: Pack the plugin (no runtime; the install hook downloads it)
+        run: npm pack
 
       - name: Report the artifact
         shell: pwsh
         run: |
-          Get-ChildItem artifacts/*.tgz | ForEach-Object {
+          Get-ChildItem dsh-floatball-pet-*.tgz | ForEach-Object {
             $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-            "artifact: $($_.Name)  $([math]::Round($_.Length / 1MB, 1)) MB"
+            "artifact: $($_.Name)  $([math]::Round($_.Length / 1MB, 2)) MB"
             "sha256:   $hash"
           }
 
@@ -78,5 +78,5 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*.tgz
+          files: dsh-floatball-pet-*.tgz
           body_path: release-notes.md

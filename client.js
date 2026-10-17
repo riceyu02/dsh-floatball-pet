@@ -18,7 +18,7 @@ window.__ModuleLoader__.load({
       enableHint: '关掉只是停止悬浮球进程，灵动岛的外观与偏好设置都原样保留。',
       version: '版本',
       check: '检查更新',
-      checking: '正在查询 GitHub…',
+      checking: '正在查询更新…',
       latest: '已是最新版本',
       update: '更新到',
       updating: '正在下载并安装…装完需要重启 DSH',

@@ -26,7 +26,7 @@ DeepSeek 余额、下面显示 DSH 运行时长（精确到秒），最右边一
 | **自定义图标** | 可换 GIF 动图或 PNG/JPG/WebP/BMP，一键恢复默认立绘 |
 | **游戏让位** | 检测到游戏全屏 / 无边框全屏时自动隐藏，退出全屏立刻回来；浏览器 F11、播放器不会误判 |
 | **托盘** | 托盘菜单可显示悬浮球、打开 DSH、切换大小、退出 |
-| **版本更新** | DSH 设置 →「灵动岛悬浮球」里检查更新并一键升级（装完重启 DSH） |
+| **版本更新** | DSH 设置 →「灵动岛悬浮球」里检查更新并一键升级，通常只下载约 1.7 MB（装完重启 DSH） |
 
 ## 安装：作为 DSH 插件
 
@@ -43,7 +43,7 @@ DeepSeek 余额、下面显示 DSH 运行时长（精确到秒），最右边一
 | 方式 | 适合 | 代价 |
 |---|---|---|
 | **方式一**（npm，插件页直接输入） | 大多数人；唯一能在插件页里直接装的方式 | 1.7 MB 的包，装时另下约 110 MB 的 Electron，要放行一次构建脚本 |
-| **方式二**（Release 整包） | 发给别人，或离线 / 连不上 GitHub | 约 114.5 MB，装完即用；不下载、不放行 |
+| **方式二**（GitHub 上的 .tgz） | npm 装不了，或想直接从 GitHub 拿 | 1.7 MB 的包，装时同样下载约 110 MB 运行时，要放行一次构建脚本 |
 
 ### 方式一：从 npm 装（推荐）
 
@@ -60,18 +60,20 @@ dsh plugin --profile desktop add dsh-floatball-pet
 
 第一次会停在**构建脚本**：包里的 `postinstall` 要在你机器上下载、校验、组装 Electron（约 110 MB），
 pnpm 11 默认不放行。插件页点「允许这些脚本并重试」；命令行就把 pnpm 打印的那行加进
-`<profile>\pnpm-workspace.yaml`（键是 `dsh-floatball-pet@0.1.0`）再跑一次。同一版本重装不再问。
+`<profile>\pnpm-workspace.yaml`（键是 `dsh-floatball-pet@<版本>`）再跑一次。同一版本重装不再问。
 
 装完**完全退出并重开 DSH**。
 
-### 方式二：用 Release 整包
+### 方式二：用 GitHub 上的 .tgz
 
-包名 `dsh-floatball-pet-<版本>.tgz`（当前 0.1.0，约 114.5 MB，内含运行时）。从
-[Releases](https://github.com/riceyu02/dsh-floatball-pet/releases) 下载，或用别人发你的文件：
+和 npm 上的是同一个包（约 1.7 MB，**不含运行时**）。从
+[Releases](https://github.com/riceyu02/dsh-floatball-pet/releases) 下载，或让别人把文件发你：
 
 ```powershell
-dsh plugin --profile desktop add "<tgz 所在目录>\dsh-floatball-pet-0.1.0.tgz"
+dsh plugin --profile desktop add "<tgz 所在目录>\dsh-floatball-pet-<版本>.tgz"
 ```
+
+安装时同样会下载约 110 MB 的 Electron，pnpm 会拦一次构建脚本，按方式一那样放行即可。
 
 > 这个文件别放临时目录：profile 会把它记成 `file:` 路径，日后升级或重装还要回来找。路径建议全英文。
 
@@ -83,7 +85,7 @@ dsh plugin --profile desktop add "<tgz 所在目录>\dsh-floatball-pet-0.1.0.tgz
 
 对方网络连不上 GitHub 时，直接把 tgz 发给他：
 
-> 这是我给你的插件包 `dsh-floatball-pet-0.1.0.tgz`，帮我装进 `desktop` profile。
+> 这是我给你的插件包 `dsh-floatball-pet-<版本>.tgz`，帮我装进 `desktop` profile。
 
 走应用内 `plugin_manager` 装的通常**当场生效**；退回命令行 `dsh plugin add` 的必须**完全退出并重开 DSH**。
 
@@ -148,7 +150,7 @@ dsh plugin --profile desktop remove dsh-floatball-pet
 | 全新安装 | 下载约 110 MB → SHA-256 校验 → 解压组装，约 10–40 秒 |
 | 升级插件版本 | 缓存命中，什么都不做（实测 0.09 秒、零下载） |
 | 换 Electron 版本 | 新版本单独一个目录，需再下一次；旧目录可删 |
-| 装 Release 整包 | 包内 `runtime/` 优先，缓存不参与 |
+| 从旧版整包升级 | 首次会把旧包里的运行时搬进缓存，不重新下载 |
 
 下载源是 `cdn.npmmirror.com` → GitHub Releases，两边都用该版本的 `SHASUMS256.txt` 校验。要换源：
 

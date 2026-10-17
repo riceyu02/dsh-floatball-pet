@@ -5,14 +5,17 @@
 > 本文件记录 `dsh-floatball-pet` 的版本变更。
 > 发布页用的精简摘要见 [RELEASE-NOTES.md](RELEASE-NOTES.md)。
 
-## 未发布
+## 0.2.0
 
 - **变更**移除独立运行版，只保留 DSH 插件一种发行方式：删掉 `启动悬浮球.cmd`、`tools/launch.cjs`、
-  `npm start` / `npm run pack` 和 electron-builder 的 portable 配置。悬浮球本来就用自带的 Electron
-  运行时承载，所以包体几乎不变（npm 包少约 6 KB，Release 整包相同）。
+  `npm start` / `npm run pack` 和 electron-builder 的 portable 配置。
 - **变更**开发调试入口改为 `npm run dev`，直接起 Electron 调界面，不经过 DSH。
 - **移除**「开机自启动」功能：设置页的开关、宿主的注册表读写（`HKCU\...\Run`）、
   应用侧的 `setLoginItemSettings` 调用全部删除。需要开机启动请自行把 DSH 加进系统启动项。
+- **变更**发布产物不再包含 Electron 运行时：npm 包与 Release 附件都是约 1.7 MB；首次安装由
+  `postinstall` 下载运行时（约 110 MB），升级复用缓存。
+- **变更**设置页的更新优先从 npm 安装（约 1.7 MB），失败时回退到 GitHub 附件；升级前会把旧包里的
+  运行时迁移到缓存，避免重新下载。
 
 ## 0.1.0
 
