@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, w
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-export const name = 'dsh-desktop-pet-host'
+export const name = 'dsh-floatball-pet-host'
 // Hard dependency, not `ctx.get('webServer')` at apply time: the service is not
 // necessarily up when the plugin activates, and a lookup returning undefined leaves the
 // settings page talking to a route nobody registered — every request then falls through
@@ -15,31 +15,21 @@ const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 const EXECUTABLE_NAME = 'DSH悬浮球.exe'
 const REPO = 'riceyu02/dsh-floatball-pet'
 const API_LATEST = `https://api.github.com/repos/${REPO}/releases/latest`
-const ROUTE_PREFIX = '/.dsh-desktop-pet'
+const ROUTE_PREFIX = '/.dsh-floatball-pet'
 /** Installers to keep: the installed one plus the previous (offline rollback). */
 const KEEP_INSTALLERS = 2
 
-/**
- * The names this package can be installed under. A profile installed from a `file:` tarball
- * or from npm uses the scoped name; the release tarballs do not, and neither do profiles
- * installed before the scope existed. Every lookup that reads the profile manifest has to
- * accept either, or an older installation silently stops having its old installers cleaned
- * up. `tools/prepare-install.cjs` keeps the same list for the same reason.
- */
-const PACKAGE_NAMES = ['dsh-floatball-pet', 'dsh-desktop-pet']
+const PACKAGE_NAME = 'dsh-floatball-pet'
 
-/** The profile manifest's spec for this package, whichever name it was installed under. */
+/** The profile manifest's spec for this package. */
 export function selfSpec(manifest) {
-  for (const name of PACKAGE_NAMES) {
-    const spec = manifest && manifest.dependencies && manifest.dependencies[name]
-    if (typeof spec === 'string') return spec
-  }
-  return null
+  const spec = manifest && manifest.dependencies && manifest.dependencies[PACKAGE_NAME]
+  return typeof spec === 'string' ? spec : null
 }
 
-/** `[whole, prefix]` of a release tarball of this package, for either naming scheme. */
+/** `[whole, prefix]` of a release tarball of this package. */
 function tarballMatch(name) {
-  return /^((?:dsh-floatball-pet|dsh-desktop-pet))-[0-9]+\.[0-9]+\.[0-9]+\.tgz$/.exec(name)
+  return /^(dsh-floatball-pet)-[0-9]+\.[0-9]+\.[0-9]+\.tgz$/.exec(name)
 }
 
 export function tarballVersion(name) {
@@ -71,19 +61,16 @@ export function resolveDshHome(profileDir, env = process.env) {
 }
 
 /**
- * Where installs cache the assembled runtime: `<DSH_HOME>/dsh-desktop-pet/runtime/<electron
+ * Where installs cache the assembled runtime: `<DSH_HOME>/dsh-floatball-pet/runtime/<electron
  * version>`. It lives outside the package on purpose — `node_modules/dsh-floatball-pet` is
  * deleted and recreated on every plugin upgrade, so a runtime kept inside it would be
  * rebuilt each time (and its file locks are what make pnpm report `ERR_PNPM_EPERM ...
  * runtime` while the ball is running). Keyed by Electron version alone, so upgrading the
  * plugin reuses it and only a new Electron release needs a new download.
- *
- * The directory keeps the old product name on purpose: renaming it would make every
- * installed profile download 269 MB again and lose its ball size, position and opacity.
  */
 export function cachedRuntimeRoot(profileDir = process.cwd(), env = process.env) {
   if (env.DSH_PET_RUNTIME_DIR) return path.resolve(env.DSH_PET_RUNTIME_DIR)
-  return path.join(resolveDshHome(profileDir, env), 'dsh-desktop-pet', 'runtime')
+  return path.join(resolveDshHome(profileDir, env), 'dsh-floatball-pet', 'runtime')
 }
 
 /**
@@ -556,7 +543,7 @@ export function apply(ctx, config = {}) {
       || process.env.DSH_PROFILE_DIR
       || process.cwd(),
   )
-  const userDataDir = path.resolve(config.userDataDir || path.join(profileDir, 'data', 'dsh-desktop-pet'))
+  const userDataDir = path.resolve(config.userDataDir || path.join(profileDir, 'data', 'dsh-floatball-pet'))
   const runtimePath = config.runtimePath || resolveRuntime(PACKAGE_ROOT, process.env, profileDir)
   const supervisor = new PetSupervisor({
     runtimePath,

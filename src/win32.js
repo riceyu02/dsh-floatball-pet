@@ -20,7 +20,7 @@
  * happens to carry — `dsh-orb` and `dsh-whale-widget` both ship one. The packaged copy is
  * what makes the fast path unconditional; the profile candidates are kept only so an
  * older install that already worked keeps working. Borrowing from another plugin is not
- * something to rely on: measured on a tester's 0.2.19 install, both of its candidates
+ * something to rely on: measured on a tester's install, both of its candidates
  * (`<profile>/node_modules/koffi`, `<profile>/node_modules/dsh-orb/node_modules/koffi`)
  * were absent, so the pet fell back to the 15 s PowerShell net and the full-screen
  * game-yield check — which only runs on this fast path — never ran at all.

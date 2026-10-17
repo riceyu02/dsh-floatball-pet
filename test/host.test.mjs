@@ -89,21 +89,12 @@ test('resolves the version-keyed runtime cache written by prepare-install', () =
   }
 })
 
-test('accepts both the scoped and the unprefixed name a profile may use', () => {
-  // npm installs use `dsh-floatball-pet`; the release tarballs are named without the
-  // The project was renamed to `dsh-floatball-pet`; profiles installed under the old name
-  // are still written that way. Both have to resolve, or an upgraded installation silently
-  // loses the lookups that clean up old installers — that is what breaks when only one name
-  // is accepted.
+test('reads this package from the profile manifest and release tarball names', () => {
   assert.equal(selfSpec({ dependencies: { 'dsh-floatball-pet': 'file:a.tgz' } }), 'file:a.tgz')
-  assert.equal(selfSpec({ dependencies: { 'dsh-desktop-pet': 'file:b.tgz' } }), 'file:b.tgz')
   assert.equal(selfSpec({ dependencies: { other: 'x' } }), null)
   assert.equal(selfSpec({}), null)
 
-  // The release tarball name, under either name.
   assert.equal(tarballVersion('dsh-floatball-pet-0.1.0.tgz'), '0.1.0')
-  assert.equal(tarballVersion('dsh-desktop-pet-0.1.0.tgz'), '0.1.0')
-  assert.equal(tarballVersion('dsh-desktop-pet-0.2.20.tgz'), '0.2.20')
   assert.equal(tarballVersion('dsh-floatball-pet-1.10.3.tgz'), '1.10.3')
   // Anything that is not one of ours has no version at all.
   assert.equal(tarballVersion('dsh-orb-0.1.4.tgz'), null)

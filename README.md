@@ -38,10 +38,6 @@ DeepSeek 余额、下面显示 DSH 运行时长（精确到秒），最右边一
 
 它默认不在 PATH 上，用完整路径调用即可；`--profile desktop` 是桌面版实际使用的 profile，**不要改**。
 
-> 本项目原名 `dsh-desktop-pet`，现已迁到
-> [riceyu02/dsh-floatball-pet](https://github.com/riceyu02/dsh-floatball-pet)，旧仓库与旧包名不再维护。
-> 装过 0.2.x 的需按下面任一方式重装一次。
-
 装法就两条：
 
 | 方式 | 适合 | 代价 |

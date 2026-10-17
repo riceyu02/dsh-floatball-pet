@@ -17,7 +17,7 @@
  * `runtime/` (the all-in-one tarball) and the version-keyed cache are checked first.
  *
  * Where it lands is the point of this file: **a stable directory under `$DSH_HOME`, not
- * inside the package**. `node_modules/dsh-desktop-pet` is deleted and recreated on every
+ * inside the package**. `node_modules/dsh-floatball-pet` is deleted and recreated on every
  * plugin upgrade, so a runtime kept there is rebuilt every time — and its file locks are
  * what make pnpm report `ERR_PNPM_EPERM ... runtime` while the ball is running. The cache
  * is keyed by Electron version alone, so:
@@ -124,7 +124,7 @@ function dshHome(env = process.env) {
  * uses to keep its downloads out of a real profile. */
 function cachedRuntimeDir(version) {
   if (process.env.DSH_PET_RUNTIME_DIR) return path.resolve(process.env.DSH_PET_RUNTIME_DIR);
-  return path.join(dshHome(), 'dsh-desktop-pet', 'runtime', version);
+  return path.join(dshHome(), 'dsh-floatball-pet', 'runtime', version);
 }
 
 /** Marker written last, so a half-finished assembly is never taken for a complete one. */
@@ -289,7 +289,7 @@ function assembleInto(out, version, source, distribution) {
 /** Build the cached runtime from the verified release zip. This is the path a published
  * (runtime-less) tarball takes, and the only one that needs the network at all. */
 function assembleFromRelease(version, out) {
-  const downloads = path.join(dshHome(), 'dsh-desktop-pet', 'downloads');
+  const downloads = path.join(dshHome(), 'dsh-floatball-pet', 'downloads');
   fs.mkdirSync(downloads, { recursive: true });
   const zipPath = path.join(downloads, `electron-v${version}-win32-x64.zip`);
   const unpacked = path.join(downloads, `electron-v${version}-win32-x64`);

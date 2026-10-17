@@ -31,7 +31,7 @@ window.__ModuleLoader__.load({
     }
 
     async function request(path, options) {
-      const response = await fetch(`/.dsh-desktop-pet${path}`, {
+      const response = await fetch(`/.dsh-floatball-pet${path}`, {
         method: options && options.body ? 'POST' : 'GET',
         headers: { 'content-type': 'application/json' },
         ...options,

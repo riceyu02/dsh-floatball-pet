@@ -170,7 +170,7 @@ function download(url, destination, onProgress) {
  * locks pnpm needs) and then runs the DSH CLI, recording the outcome where the next
  * start can read it.
  *
- * Three lessons from a tester's failed 0.2.6 → 0.2.7 run, which left the profile in a
+ * Three lessons from a tester's failed update run, which left the profile in a
  * state DSH could not even boot from:
  *
  *  1. Waiting for the pet's pid alone is not enough. The focus helper is a *detached*
@@ -185,26 +185,17 @@ function download(url, destination, onProgress) {
  *     cannot resolve the bundle. So verify the result, clean up and try once more, and
  *     always record the recovery commands.
  */
-/**
- * The names this package can be installed under. A profile installed from a `file:` or
- * from npm uses the scoped name; the release tarballs do not, and neither do profiles
- * installed before the scope existed. Every lookup below accepts either, or an older
- * installation silently loses its cleanup and rollback paths.
- */
-const PACKAGE_NAMES = ['dsh-floatball-pet', 'dsh-desktop-pet'];
+const PACKAGE_NAME = 'dsh-floatball-pet';
 
-/** The profile manifest's spec for this package, whichever name it was installed under. */
+/** The profile manifest's spec for this package. */
 function selfSpec(manifest) {
-  for (const name of PACKAGE_NAMES) {
-    const spec = manifest && manifest.dependencies && manifest.dependencies[name];
-    if (typeof spec === 'string') return spec;
-  }
-  return null;
+  const spec = manifest && manifest.dependencies && manifest.dependencies[PACKAGE_NAME];
+  return typeof spec === 'string' ? spec : null;
 }
 
-/** `[whole, prefix]` of a tarball of this package, for either naming scheme. */
+/** `[whole, prefix]` of a tarball of this package. */
 function tarballMatch(name) {
-  return /^((?:dsh-floatball-pet|dsh-desktop-pet))-[0-9]+\.[0-9]+\.[0-9]+\.tgz$/.exec(name);
+  return /^(dsh-floatball-pet)-[0-9]+\.[0-9]+\.[0-9]+\.tgz$/.exec(name);
 }
 
 function tarballIsOurs(name) {
@@ -221,15 +212,12 @@ const APPLY_SCRIPT = [
   "const fs = require('node:fs');",
   "const path = require('node:path');",
   "const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));",
-  "const PACKAGE_NAMES = config.packageNames || [];",
-  "const TARBALL_NAME = /^((?:dsh-floatball-pet|dsh-desktop-pet))-[0-9]+[.][0-9]+[.][0-9]+[.]tgz$/;",
-  "/** This package's spec in the profile manifest, whichever name it was installed under. */",
+  "const PACKAGE_NAME = config.packageName;",
+  "const TARBALL_NAME = /^(dsh-floatball-pet)-[0-9]+[.][0-9]+[.][0-9]+[.]tgz$/;",
+  "/** This package's spec in the profile manifest. */",
   "function specOf(manifest) {",
-  "  for (const name of PACKAGE_NAMES) {",
-  "    const spec = manifest.dependencies && manifest.dependencies[name];",
-  "    if (typeof spec === 'string') return spec;",
-  "  }",
-  "  return null;",
+  "  const spec = manifest.dependencies && manifest.dependencies[PACKAGE_NAME];",
+  "  return typeof spec === 'string' ? spec : null;",
   "}",
   "const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));",
   "const write = (payload) => fs.writeFileSync(config.statusPath, JSON.stringify(payload, null, 2));",
@@ -404,7 +392,7 @@ async function stageAndApply(release, dshExePath, onProgress) {
     tarballDir,
     profileDir: profileDir(),
     keepInstallers: KEEP_INSTALLERS,
-    packageNames: PACKAGE_NAMES,
+    packageName: PACKAGE_NAME,
     recovery: [
       '① 确认没有 DSH悬浮球 进程在跑（托盘退出不够，焦点帮手是独立进程）',
       `② 删除 ${packageDir} 与 ${nodeModulesDir}\\dsh-floatball-pet_tmp_*`,

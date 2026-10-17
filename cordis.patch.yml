@@ -1,4 +1,4 @@
-# DSH desktop-pet bundle.
+# DSH floatball-pet bundle.
 #
 #  * `dsh-floatball-pet/host` is the host row: it owns the separate transparent Electron
 #    helper (keeping it out of DSH's own BrowserWindow isolates crashes, focus rules and
@@ -17,7 +17,7 @@
 # Executable names, without the .exe, comma separated or as a YAML list.
 
 - insert:
-    - id: dsh-desktop-pet-host
+    - id: dsh-floatball-pet-host
       name: 'dsh-floatball-pet/host'
       config:
         startEnabled: true

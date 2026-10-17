@@ -918,7 +918,7 @@ async function focusDshViaDll() {
  * Put the pet's own window back into the topmost band by reading the real window style
  * rather than trusting Electron.
  *
- * Measured by a tester on 0.2.4/0.2.5/0.2.6: `setAlwaysOnTop(false)` really does clear
+ * Measured by a tester: `setAlwaysOnTop(false)` really does clear
  * `WS_EX_TOPMOST`, and the native call behind `setAlwaysOnTop(true, 'floating')` really
  * does set it — but Chromium re-applies the window style about 0.7 ms later and the bit
  * is gone again, so the JS side alone can never hold it. This goes straight through

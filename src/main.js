@@ -199,10 +199,10 @@ let tray = null;
  * `moveTop()` or `setAlwaysOnTop(false)`:
  *
  *   * `moveTop()` stacks this layered, non-activatable window at HWND_TOP, which drops
- *     it out of the topmost band (measured on 0.2.3: the ball surfaced for a moment and
+ *     it out of the topmost band (measured: the ball surfaced for a moment and
  *     then sank behind the next activated window).
- *   * `setAlwaysOnTop(false)` clears WS_EX_TOPMOST for real, and on 0.2.4..0.2.6 the
- *     following `true` could not hold it — the style was re-applied ~0.7 ms later with
+ *   * `setAlwaysOnTop(false)` clears WS_EX_TOPMOST for real, and a following `true` could
+ *     not hold it — the style was re-applied ~0.7 ms later with
  *     the bit off, so the ball spent 0.026% of each cycle on top and the rest below
  *     every other window.
  *   * `win.isAlwaysOnTop()` reports Chromium's cached flag, never the real style.
@@ -609,7 +609,7 @@ function releaseHeldBox() {
  * Both moving the window and changing its click-through style make Chromium re-apply
  * the extended window style, and the topmost bit does not survive that. Measured
  * consequence while dragging the ball over another window: the bit is gone within a
- * frame or two of the move, and on 0.2.8 nothing noticed until the 15 s check — the ball
+ * frame or two of the move, and an earlier build noticed nothing until the 15 s check — the ball
  * sank to the bottom a few seconds into the drag. A 250 ms guardian is still too slow
  * against a style rewrite that happens per frame, so every move re-asserts natively
  * (a read when the bit is fine; a write only when it is not) and checks once more 40 ms
@@ -1186,7 +1186,7 @@ function createWindow() {
   //
   // The JS call here is the cheap half: it costs nothing and is correct whenever
   // Chromium's cached "always on top" is false. It is NOT enough on its own — a
-  // tester's microsecond trace on 0.2.4..0.2.6 showed that everything Electron does
+  // tester's microsecond trace showed that everything Electron does
   // through setAlwaysOnTop gets undone: `false` clears WS_EX_TOPMOST for real, and
   // `true` does set it but the style is re-applied ~0.7 ms later with the bit off.
   // So every fifth tick also reads the real window style through the native helper and
