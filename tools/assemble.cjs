@@ -37,7 +37,7 @@ if (!fs.existsSync(RUNTIME)) throw new Error('no Electron runtime at ' + RUNTIME
 // The precompiled focus routine has to be built BEFORE the output folder is cleared:
 // on the machines this app targets, compiling C# at runtime is impossible (creating
 // the temporary csc.exe is refused), so the DLL is what makes focusing work at all.
-console.log('building the focus DLL ...');
+console.log('preparing the focus DLL ...');
 const { build: buildFocusDll } = require('./build-focus-dll.cjs');
 console.log('  PetFocus.dll:', buildFocusDll(), 'bytes');
 

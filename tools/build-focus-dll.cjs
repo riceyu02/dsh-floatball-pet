@@ -113,6 +113,12 @@ const CS = [
 ].join('\n');
 
 function build() {
+  // Install-time reuse (prepare-install.cjs sets this): the released package already
+  // carries the DLL, and running Add-Type here would put back the very C# compiler
+  // dependency this DLL exists to remove. Release builds keep the default and rebuild.
+  if (process.env.DSH_PET_FOCUS_DLL === 'reuse' && fs.existsSync(DLL)) {
+    return fs.statSync(DLL).size;
+  }
   fs.mkdirSync(OUT_DIR, { recursive: true });
   fs.rmSync(DLL, { force: true });
   const script = [

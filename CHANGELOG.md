@@ -12,7 +12,7 @@
 > 已经装过 0.2.x 的人不会收到自动更新提示（0.1.0 比 0.2.20 小），需要手动重装一次，之后恢复正常。
 
 **项目更名为 `dsh-floatball-pet`**（仓库与 npm 包名一致），并**把运行时从包里挪出去**：
-插件包从 113.3 MB 瘦到 **2.21 MB**，升级不再下载任何东西。
+插件包从 113.3 MB 瘦到 **1.7 MB**，升级不再下载任何东西。
 
 - **变更**仓库与 npm 包名：`dsh-desktop-pet` → **`dsh-floatball-pet`**。原因是 npm 上那个裸名
   已被另一位作者的同类项目占用（`matchafrenchfries` / `sereinmono/dsh-desktop-pet`），发不上去。
@@ -35,10 +35,21 @@
   被悬浮球占用的文件，**升级前不必先退出悬浮球**了。
 - **变更** `plugin/host.mjs` 的运行时查找顺序：显式覆盖 → 包内 `runtime/` → 源码检出
   `dist/DSH悬浮球` → 版本化缓存。包内路径仍然优先，所以自带运行时的整包行为完全不变。
+- **新增** npm 发布：包名 `dsh-floatball-pet` 发到 `registry.npmjs.org`（`publishConfig` 把源钉死，
+  本机 `~/.npmrc` 指向 npmmirror 也能发）。新增 **`postinstall`** 钩子——npm 不会为 registry 包执行
+  `prepare`，少了它从 npm 装出来的插件就没有运行时；git 安装仍走 `prepare`，两个钩子是同一个脚本。
+  **已发布 `0.1.0`**（2026-10-17，经 staged publishing 审核上线；npmjs 与 npmmirror 均可查）。
+  npm 已限制 bypass-2FA 的直接发布 token，后续发版走 staged publishing / trusted publishing，
+  步骤见 `docs/npm-publish.md`。
+- **变更**安装时直接复用包里预编译的 `build/PetFocus.dll`，不再跑 PowerShell 的 `Add-Type`：
+  这个 DLL 本来就是为了绕开"目标机器上编不了 C#"才存在的，安装过程不该又把它依赖回来。
+  发版构建（`npm run build:dsh-plugin`）不受影响，照旧重新编译。
 
-> 实测（真发布产物、Electron 33.2.0）：
-> 精简包 **2.21 MB** / 解压 5.66 MB（原 113.3 MB / 269 MB）；
-> 全新安装：下载 **109.6 MB / 8.1 秒（13.6 MB/s）** → 校验通过 → 组装出 273 MB 运行时 → koffi 自检 `OK`；
-> 升级（把包目录整个换成 0.1.0）：**0.09 秒、零下载**，缓存命中；
+> 实测（npm 包 `dsh-floatball-pet@0.1.0`、Electron 33.2.0）：
+> npm 包 **1.7 MB** / 解压 5.1 MB（原 113.3 MB / 269 MB）；
+> 全新安装真跑 `postinstall`：**66.6 秒**，其中下载 **109.6 MB**（镜像源那次连接被掐断，
+> 自动回落 GitHub 成功，sha256 校验通过）→ 组装出 273 MB 运行时 → koffi 自检 `OK`；
+> `resolveRuntime` 解析到缓存里的 `DSH悬浮球.exe`；
+> 升级（把包目录整个换掉）：**0 秒、零下载**，缓存命中；
 > 整包 `npm run build:dsh-plugin` 仍产出 114.5 MB 的离线包，不受影响。
 

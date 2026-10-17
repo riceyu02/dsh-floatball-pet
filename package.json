@@ -21,8 +21,17 @@
     "desktop-pet",
     "floating-ball"
   ],
-  "private": true,
   "type": "commonjs",
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "main": "src/main.js",
   "exports": {
     ".": "./src/main.js",
@@ -36,6 +45,7 @@
     "pack": "node tools/assemble.cjs",
     "build:dsh-plugin": "node tools/build-dsh-plugin.cjs",
     "prepare": "node tools/prepare-install.cjs",
+    "postinstall": "node tools/prepare-install.cjs",
     "test": "node tools/check-apply-script.cjs && node --test test/*.test.mjs"
   },
   "files": [

@@ -1,12 +1,20 @@
 'use strict';
 /**
- * `prepare` hook.
+ * `prepare` + `postinstall` hook.
  *
- * pnpm runs this script when the repository is installed as a dependency — a
- * `dsh plugin --profile desktop add git+https://github.com/riceyu02/dsh-desktop-pet.git`
- * and an `npm install` of the published tarball both matter here. The helper runtime is
- * deliberately not published (it is a copy of the Electron distribution, a quarter of a
- * gigabyte), so it has to be assembled on the machine doing the install.
+ * Two hook names because npm runs different ones for different sources, and both are
+ * routes this package is installed by:
+ *
+ *   prepare      a git dependency (`dsh plugin ... add git+https://github.com/...`) —
+ *                pnpm/npm build the fetched tree and run `prepare` there
+ *   postinstall  the published registry tarball (`dsh plugin ... add dsh-floatball-pet`) —
+ *                `prepare` does NOT run for a registry install, so without this hook the
+ *                package would land with no runtime and the ball would refuse to start
+ *
+ * The helper runtime is deliberately not published (it is a copy of the Electron
+ * distribution, a quarter of a gigabyte), so it has to be assembled on the machine doing
+ * the install. Both hooks share this file and both are idempotent: the package-local
+ * `runtime/` (the all-in-one tarball) and the version-keyed cache are checked first.
  *
  * Where it lands is the point of this file: **a stable directory under `$DSH_HOME`, not
  * inside the package**. `node_modules/dsh-desktop-pet` is deleted and recreated on every
@@ -258,12 +266,18 @@ function extractZip(zipPath, destination) {
 /** Assemble into `out` from a chosen Electron distribution, then mark it complete. */
 function assembleInto(out, version, source, distribution) {
   process.env.DSH_PET_ASSEMBLE_OUT = out;
+  // The published package already carries build/PetFocus.dll. Rebuilding it here would
+  // spawn PowerShell's Add-Type, which is exactly what this DLL exists to avoid on the
+  // machines that install the plugin — an install must not depend on a working C#
+  // compiler. Release builds (build-dsh-plugin) leave this unset and do rebuild it.
+  process.env.DSH_PET_FOCUS_DLL = 'reuse';
   if (distribution !== undefined) process.env.DSH_PET_ELECTRON_DIST = distribution;
   try {
     require('./assemble.cjs');
   } finally {
     delete process.env.DSH_PET_ASSEMBLE_OUT;
     delete process.env.DSH_PET_ELECTRON_DIST;
+    delete process.env.DSH_PET_FOCUS_DLL;
   }
   // The assembled directory is checked the same way as any other runtime; this is where
   // an assembly that silently copied nothing gets caught.

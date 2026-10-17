@@ -86,22 +86,23 @@ cd "<DSH 安装目录>\resources\runtime\cli\bin"
 > [riceyu02/dsh-desktop-pet](https://github.com/riceyu02/dsh-desktop-pet) 保留作存档、不再更新。
 > 装过旧版的人：旧版的自更新器指向旧仓库，要按方式一或方式零重装一次才能跟到新仓库。
 
-装法一共四条，代价差得很多，按省事程度排：
+装法一共五条，代价差得很多，按省事程度排：
 
 | 方式 | 需要什么 | 代价 |
 |---|---|---|
+| **方式四**（从 npm 装，插件页一键） | 能连 npm 源（国内选「中国大陆镜像源」）、放行构建脚本 | 1.7 MB 的包，装时**另下约 110 MB 的 Electron**；**唯一能在插件页里一键装的方式** |
 | **方式零**（用本地 Release 包，最适合发给别人） | 只要能收到 `dsh-floatball-pet-0.1.0.tgz` 这个文件 | 约 114.5 MB 的包（内含运行时），装完即用：不构建、**不下载 Electron**、不需要放行构建脚本 |
 | **方式一**（Release 下载地址，推荐） | 能连 `github.com` | 下载 114.5 MB |
-| **方式二**（git 仓库地址） | 能连 `github.com`、`git` 在 PATH、放行构建脚本 | 包里只有代码（约 2 MB），装的时候**另下约 110 MB 的 Electron**；换 commit 要重新放行一次 |
+| **方式二**（git 仓库地址） | 能连 `github.com`、`git` 在 PATH、放行构建脚本 | 包里只有代码（约 1.7 MB），装的时候**另下约 110 MB 的 Electron**；换 commit 要重新放行一次 |
 | **方式三**（自己构建） | Node.js 22+，能连 `github.com` 与 npm 源 | `npm install` 之后自己跑一条打包命令；不需要放行构建脚本，适合想改代码的人 |
 
-两个包的体积差在哪：**0.1.0 起，方式二装出来的包不含 Electron**（`runtime/` 占了旧包的
+两个包的体积差在哪：**0.1.0 起，方式二和方式四装出来的包都不含 Electron**（`runtime/` 占了旧包的
 100%），改为安装时按需下载并缓存；而 Release 里那份是特意打进包的，给**装完即用、甚至离线**的场景。
 两条路的运行时位置、下载时机和缓存规则见文末「运行时放在哪、什么时候下载」一节。
 
 **要发给别人，用方式零**——不依赖对方能否连 GitHub、也不用等他构建，最不容易中途卡住。方式二更适合想跟源码、或拿不到 Release 资产的人。
 
-> 下面的小节顺序是「方式一 → 方式零 → 方式二 → 方式三」：方式一和方式零用的是同一个包、同一条命令，只是包从哪来不同，所以放在一起讲。
+> 下面的小节顺序是「方式一 → 方式零 → 方式二 → 方式四 → 方式三」：方式一和方式零用的是同一个包、同一条命令，只是包从哪来不同，所以放在一起讲。
 
 ### 方式一：装 Release 里的安装包（推荐，不需要编译）
 
@@ -187,6 +188,60 @@ allowBuilds:
 这次抓取算的 commit，所以换一个 commit 就得换一行。DSH 插件页上也有对应的
 「允许这些脚本并重试」按钮。Electron 下载慢时先设 `$env:ELECTRON_MIRROR`，见「常见问题」。
 
+### 方式四：从 npm 装（插件页里一键安装）
+
+包名是 **`dsh-floatball-pet`**，与仓库同名，发布在 npmjs 上（`npm view dsh-floatball-pet` 可查）。
+
+这是**唯一能让「DSH 插件页 → 添加插件 → 中国大陆镜像源」生效**的方式：那个面板里只有
+npm 包名会走镜像源，GitHub 地址和 `.tgz` 直链都会绕过它。
+
+**在插件页里**：DSH 设置 → 插件 → 添加插件 → 填 `dsh-floatball-pet` →
+安装源选「中国大陆镜像源」→ 安装 → **允许构建脚本** → 再点一次安装 → **完全退出并重开 DSH**。
+
+**命令行等价**：
+
+```powershell
+dsh plugin --profile desktop add dsh-floatball-pet
+```
+
+它和方式二一样是**不含运行时的包**（实测 1.7 MB / 解压 5.1 MB），装的时候按需下载 Electron
+（约 110 MB）——所以**同样要过「构建脚本」这一关**：包里的 `postinstall` 负责下载、校验、组装
+运行时，pnpm 11 默认不放行。命令行第一次跑会这样退出：
+
+```text
+[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: dsh-floatball-pet@0.1.0
+Run "pnpm approve-builds" to pick which dependencies should be allowed to run scripts.
+```
+
+插件页上是「允许这些脚本并重试」按钮。放行后的实测输出：
+
+```text
+prepare: downloading https://cdn.npmmirror.com/binaries/electron/v33.2.0/electron-v33.2.0-win32-x64.zip
+curl: (56) schannel: server closed abruptly (missing close_notify)
+prepare: downloading https://github.com/electron/electron/releases/download/v33.2.0/electron-v33.2.0-win32-x64.zip
+prepare: downloaded 109.6 MB in 26.5s (4.1 MB/s), sha256 verified
+prepare: assembling the helper runtime for Electron 33.2.0 into <DSH_HOME>\dsh-desktop-pet\runtime\33.2.0 ...
+```
+
+镜像源中途断流时会自动换 GitHub 再下一次（上面这次实测就是），两个源用的是同一个
+`SHASUMS256.txt` 校验和，换源不降低可信度；只想用一个源可以设 `DSH_PET_ELECTRON_MIRROR`。
+
+放行键是 **`包名@版本`**（如 `dsh-floatball-pet@0.1.0`，以 pnpm 自己打印的那行为准），这一点比
+方式二省心：同一个版本号怎么重装都只用放行一次，只有**换版本**才需要再放行；git 路线的键里带着
+commit，换个 commit 就得重来一遍。
+
+> 命令行里手动放行，写法与方式二相同，只是键不同：
+>
+> ```yaml
+> allowBuilds:
+>   "dsh-floatball-pet@0.1.0": true
+> ```
+
+> 中国大陆镜像源同步需要一点时间：刚发布的版本可能还没同步过去，查不到就把安装源换成默认源，
+> 或先用方式一/方式零。
+
+缓存规则同方式二，见文末「运行时放在哪、什么时候下载」。
+
 ### 方式三：自己构建
 
 用 Node.js 22 或更高版本（`package.json` 的 `engines` 要求 `>=22`）：
@@ -199,9 +254,9 @@ npm run build:dsh-plugin         # 产出 artifacts\dsh-floatball-pet-<版本>.t
 dsh plugin --profile desktop add "$PWD\artifacts\dsh-floatball-pet-0.1.0.tgz"
 ```
 
-`npm install` 时 `prepare` 钩子**会跳过运行时组装**——它认得出这是工作副本（有 `.git`），
-组装只在你显式执行 `npm run pack`（独立程序用）或 `npm run build:dsh-plugin`（插件安装包用）
-时才做，所以不会白等，也不会重复下载 Electron。
+`npm install` 时 `prepare` 与 `postinstall` 钩子**都会跳过运行时组装**——它们认得出这是工作副本
+（有 `.git`），组装只在你显式执行 `npm run pack`（独立程序用）或 `npm run build:dsh-plugin`
+（插件安装包用）时才做，所以不会白等，也不会重复下载 Electron。
 
 这条路**不需要等 pnpm 来拦构建脚本**：你是自己跑 `npm run build:dsh-plugin` 把包造出来的，
 最后那一步 `add` 喂给 DSH 的是一个已经造好的本地 tgz，走的就是方式零那条路。
@@ -220,6 +275,10 @@ DSH 的 agent 手上有插件管理接口，能自己装完这一套：下载、
 > 用 Release **v0.1.0** 里的 `dsh-floatball-pet-0.1.0.tgz`，装进 `desktop` profile。
 > 需要放行构建脚本就先问我；装完告诉我结果。
 
+最省事的一条是走 npm（即方式四）：
+
+> 帮我装 npm 上的 `dsh-floatball-pet` 插件，装进 `desktop` profile；需要放行构建脚本先问我，装完告诉我结果。
+
 对方网络连不上 `github.com` 时，改成把 tgz 直接发给他：
 
 > 这是我给你的插件包 `dsh-floatball-pet-0.1.0.tgz`（DSH 悬浮球桌宠），帮我装进 `desktop` profile。
@@ -231,6 +290,7 @@ DSH 的 agent 手上有插件管理接口，能自己装完这一套：下载、
 | agent 走**应用内**插件管理接口（`plugin_manager`，Creator 模式默认启用） | 基本不用管：实测 `application: "applied"`，**不重启 DSH 也会当场生效**（旧实例退出、新实例自动拉起） |
 | agent 退回**命令行** `dsh plugin --profile desktop add …` | 装完必须**完全退出并重开 DSH** |
 | agent 装的是 **git 路线**（`git+https://…`） | 它会先问你是否放行构建脚本，之后**每换一个 commit 都要再问一次** |
+| agent 装的是 **npm 路线**（`dsh-floatball-pet`） | 它也会先问是否放行构建脚本；放行一次后同一版本重装不再问，换版本才再问 |
 | agent 的 shell 起不来（Windows 沙箱下 `pwsh` 可能直接起不来，退出码 `0xC0000142`） | 需要把该会话的文件权限放行到 `danger-full-access`，或让对方用 DSH 的插件页手动装 |
 
 两个提醒：
@@ -299,15 +359,16 @@ npm install
 
 ```text
 dsh-floatball-pet/
-├── package.json                 # Electron 应用元数据 + DSH bundle 声明
+├── package.json                 # Electron 应用元数据 + DSH bundle 声明 + npm 发布配置
 ├── cordis.patch.yml             # 把宿主生命周期插件插入 DSH 配置树
 ├── plugin/host.mjs              # 启动/停止 helper、沙箱回退、DSH 父进程看门狗
 ├── 启动悬浮球.cmd                # 独立模式启动器
 ├── src/                         # Electron 应用（主进程 / 渲染进程 / 托盘 / 图标）
 ├── tools/                       # 构建与运维脚本（组装运行时、打包插件、发布 Release）
 ├── test/host.test.mjs           # 宿主插件的单元测试（node --test）
+├── .github/workflows/           # release.yml（整包）+ publish-npm.yml（npm 包）
 ├── CHANGELOG.md                 # 更新日志（当前这条线）
-├── docs/                        # 三张状态截图 + 旧版本更新日志
+├── docs/                        # 三张状态截图、旧版本更新日志、发布到 npm 的步骤
 └── build/icon.ico               # 应用图标
 ```
 
@@ -322,7 +383,7 @@ dsh-floatball-pet/
 |---|---|
 | `npm install` 卡在 Electron 下载 | `$env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"; npm install`；npm 11 若提示 `allowScripts`，补跑 `node node_modules/electron/install.js` |
 | 双击启动器什么都没发生 | 路径含非 ASCII 字符，或本机沙箱起不来；改用 `dsh plugin` 的插件模式（会自动重试兼容模式） |
-| 日志说「找不到悬浮球运行时」 | `runtime/` 没组装好。源码安装执行 `npm run pack`；插件安装重新装一次以触发 `prepare` |
+| 日志说「找不到悬浮球运行时」 | `runtime/` 没组装好。源码安装执行 `npm run pack`；插件安装若被 pnpm 拦下了构建脚本（`ERR_PNPM_IGNORED_BUILDS`，`prepare`/`postinstall` 没执行），先放行再装一次 |
 | 单击悬浮球没反应 | 看 `pet.log` 里的 `reason`；受限令牌下抢前台靠 `tools/focus-agent.cjs` 帮手，插件模式会在启动时自动拉起它 |
 | 悬浮球周围有一圈黑框 | 属已知的透明窗口合成问题，当前实现已规避；若复现请附上系统版本与显卡驱动 |
 
@@ -362,7 +423,8 @@ dsh-floatball-pet/
 ## 运行时放在哪、什么时候下载
 
 0.1.0 起，插件包本身不含 Electron（`runtime/` 是个 269 MB 的 Electron 副本，占了整包的 100%）。
-安装时由 `tools/prepare-install.cjs` 组装，落在**包外**的版本化缓存里：
+安装时由 `tools/prepare-install.cjs` 组装（git 安装走 `prepare`，npm 安装走 `postinstall`，是同一个
+脚本），落在**包外**的版本化缓存里：
 
 ```text
 <DSH_HOME>\dsh-floatball-pet\
