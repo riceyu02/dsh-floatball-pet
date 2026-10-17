@@ -5,6 +5,11 @@
 > 本文件记录 `dsh-floatball-pet` 的版本变更。
 > 发布页用的精简摘要见 [RELEASE-NOTES.md](RELEASE-NOTES.md)。
 
+## 0.3.2
+
+- **变更**更新器的 GitHub 回退优先选择不带 `-full` 的瘦包：npm 暂时不可用时也只下载约 1.7 MB。
+  `-full` 完整包继续留在 Release 里，供 0.1.0 的旧更新器（只会取第一个 `.tgz`、不会放行安装脚本）使用。
+
 ## 0.3.1
 
 - **修复**装了 NVIDIA GeForce Experience / NVIDIA App 的机器上，悬浮球一启动就被当成「全屏游戏」永久隐藏。

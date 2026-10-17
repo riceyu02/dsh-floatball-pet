@@ -3,6 +3,11 @@
 给 GitHub Release 页面用的摘要。每个 `## <版本>` 一节对应同名 tag，发布时由
 `.github/workflows/release.yml` 原样取用；完整的技术细节见 [CHANGELOG.md](CHANGELOG.md)。
 
+## 0.3.2
+
+- **变更**设置页的更新在 npm 不可用、回退到 GitHub 时，优先下载约 1.7 MB 的瘦包，不再默认拿
+  `-full.tgz` 完整包；完整包只留给 0.1.0 的旧更新按钮。
+
 ## 0.3.1
 
 - **修复**装了 NVIDIA GeForce Experience / NVIDIA App 的电脑（比如天选）上悬浮球一直不显示：NVIDIA 的桌面

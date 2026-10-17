@@ -9,6 +9,7 @@ import {
   PetSupervisor,
   chooseUpdate,
   helperEnvironment,
+  pickReleaseAsset,
   resolveDshHome,
   resolveRuntime,
   selfSpec,
@@ -249,4 +250,12 @@ test('desktop overlays never count as full-screen games', () => {
   assert.equal(win32.isOverlayWindow('GameOverlayUI', 'Steam', 'gameoverlayui'), true)
   assert.equal(win32.isOverlayWindow('Chrome_WidgetWin_1', 'Video', 'chrome'), false)
   assert.equal(win32.isOverlayWindow('', '', 'explorer'), false)
+})
+
+test('the GitHub fallback prefers the thin package over the -full asset', () => {
+  const full = { name: 'dsh-floatball-pet-0.3.2-full.tgz' }
+  const thin = { name: 'dsh-floatball-pet-0.3.2.tgz' }
+  assert.equal(pickReleaseAsset([full, thin]).name, thin.name)
+  assert.equal(pickReleaseAsset([full]).name, full.name)
+  assert.equal(pickReleaseAsset([]), null)
 })

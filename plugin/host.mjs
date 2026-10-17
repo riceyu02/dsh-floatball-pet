@@ -422,11 +422,21 @@ async function npmLatest() {
   return null
 }
 
+/**
+ * Pick the `.tgz` a modern client should fall back to. Prefer the thin package: the
+ * `-full` asset exists only for 0.1.0's older updater, which grabs the first `.tgz` and
+ * cannot run install scripts. A modern client downloads ~1.7 MB even when npm is down.
+ */
+export function pickReleaseAsset(assets) {
+  const tarballs = (assets || []).filter((entry) => /\.tgz$/i.test(entry.name || ''))
+  return tarballs.find((entry) => !/-full\.tgz$/i.test(entry.name)) ?? tarballs[0] ?? null
+}
+
 /** The latest GitHub release and its installer asset. */
 async function githubLatest() {
   const release = await fetchJson(API_LATEST, RELEASE_TIMEOUT_MS)
   const version = String(release.tag_name || '').replace(/^v/, '')
-  const asset = (release.assets || []).find((entry) => /\.tgz$/i.test(entry.name || ''))
+  const asset = pickReleaseAsset(release.assets)
   return {
     version,
     pageUrl: release.html_url || `https://github.com/${REPO}/releases`,
