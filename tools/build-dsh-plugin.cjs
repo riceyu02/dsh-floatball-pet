@@ -44,7 +44,7 @@ const manifest = {
   type: 'module',
   main: 'plugin/host.mjs',
   exports: {
-    '.': './plugin/host.mjs',
+    '.': './plugin/client-host.mjs',
     './host': './plugin/host.mjs',
     './client': './client.js',
     './package.json': './package.json',

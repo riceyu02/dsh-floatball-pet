@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -201,4 +201,15 @@ test('game process lists survive the trip to the helper environment', () => {
   assert.equal(env.DSH_PET_IGNORE_PROCESSES, 'mpv')
   // And the two variables that used to make the ball never appear stay stripped.
   assert.equal(env.ELECTRON_RUN_AS_NODE, undefined)
+})
+
+test('the package root is a host-safe stub, not the Electron entry', () => {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  // The settings row imports the package root inside the DSH host process. Pointing it
+  // at src/main.js made that import `require('electron')`, so the row never started and
+  // the settings section never mounted.
+  assert.equal(pkg.exports['.'], './plugin/client-host.mjs')
+  assert.equal(existsSync(new URL('../plugin/client-host.mjs', import.meta.url)), true)
+  // Electron still uses `main` when it launches the app itself.
+  assert.equal(pkg.main, 'src/main.js')
 })
