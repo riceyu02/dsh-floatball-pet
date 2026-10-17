@@ -14,7 +14,7 @@
 
 - **变更**仓库与 npm 包名：`dsh-desktop-pet` → **`dsh-floatball-pet`**。原因是 npm 上那个裸名
   已被另一位作者的同类项目占用（`matchafrenchfries` / `sereinmono/dsh-desktop-pet`），发不上去。
-  旧仓库 [riceyu02/dsh-desktop-pet](https://github.com/riceyu02/dsh-desktop-pet) 保留作存档，不再更新。
+  旧仓库 `riceyu02/dsh-desktop-pet` 已下线，不再更新。
 - **兼容**旧名：宿主与自更新器同时认 `dsh-floatball-pet` 与 `dsh-desktop-pet` 两种安装名、
   两种 tarball 文件名，所以从旧名升级上来不会丢掉"清理旧安装包"这类逻辑。
 - **刻意保留**两个旧名字，都是为了不打扰已装用户：运行时缓存目录仍是 `<DSH_HOME>\dsh-desktop-pet\`
