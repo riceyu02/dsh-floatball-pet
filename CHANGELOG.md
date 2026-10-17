@@ -5,11 +5,15 @@
 > 本文件记录 `dsh-floatball-pet` 的版本变更。
 > 发布页用的精简摘要见 [RELEASE-NOTES.md](RELEASE-NOTES.md)。
 
-## 0.2.2
+## 0.3.0
 
-- **修复**更新插件后悬浮球仍运行上一个版本的代码。运行时缓存只按 Electron 版本复用，瘦包升级后会继续用缓存里
-  旧的 `resources/app`；现在每次启动前会把 `src`、`plugin`、`build`、`client.js`、`package.json` 和随包的
-  koffi 按插件版本同步进缓存（Electron 二进制不动，不重新下载）。
+- **修复**设置里不显示「灵动岛悬浮球」：设置行的宿主入口一度指向 Electron 的 `src/main.js`，DSH 宿主导入时
+  `require('electron')` 抛错，整行起不来；现在入口是宿主安全的 `plugin/client-host.mjs`。
+- **修复**浏览器播放视频全屏时悬浮球仍置顶挡住画面：Chrome、Edge、Firefox、VLC、PotPlayer 等全屏时与游戏一样
+  隐藏，退出全屏立即恢复。
+- **修复**插件升级后悬浮球仍运行上一个版本的代码：运行时缓存只按 Electron 版本复用，瘦包升级会继续用旧的
+  `resources/app`；现在每次启动前按插件版本把 `src`、`plugin`、`build`、`client.js`、`package.json` 和随包的
+  koffi 同步进缓存（Electron 二进制不动，不重新下载）。
 
 ## 0.2.1
 
